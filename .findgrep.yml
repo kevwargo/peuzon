@@ -1,0 +1,40 @@
+exclude-paths:
+  build:
+    alias: B
+    default: true
+    pattern: build
+  cover:
+    disabled: true
+  cxx:
+    alias: x
+    default: true
+    pattern: .cxx
+  git:
+    default: true
+    pattern: .git
+  gradle:
+    default: true
+    pattern: .gradle
+  serverless:
+    disabled: true
+  venv:
+    disabled: true
+ignore-files:
+  tests:
+    disabled: true
+select-files:
+  elisp:
+    disabled: true
+  go:
+    disabled: true
+  graphql:
+    disabled: true
+  java:
+    alias: J
+    pattern: '*.java'
+  kotlin:
+    alias: K
+    pattern: '*.kt'
+  typescript:
+    alias: t
+    pattern: '*.ts'
