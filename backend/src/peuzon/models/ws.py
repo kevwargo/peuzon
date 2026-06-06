@@ -1,20 +1,12 @@
-from functools import wraps
-from inspect import getfullargspec
-
-from pydantic import BaseModel, ConfigDict
-from pydantic.alias_generators import to_camel
+from peuzon.models import Apigw2Model
 
 
-class AwsModel(BaseModel):
-    model_config = ConfigDict(alias_generator=to_camel)
-
-
-class Identity(AwsModel):
+class Identity(Apigw2Model):
     source_ip: str | None = None
     user_agent: str | None = None
 
 
-class RequestContext(AwsModel):
+class RequestContext(Apigw2Model):
     route_key: str
     event_type: str
 
@@ -36,7 +28,7 @@ class RequestContext(AwsModel):
     authorizer: dict | None = None
 
 
-class AuthorizerEvent(AwsModel):
+class AuthorizerEvent(Apigw2Model):
     type: str
     method_arn: str
 
@@ -51,7 +43,7 @@ class AuthorizerEvent(AwsModel):
     request_context: RequestContext
 
 
-class WebSocketRouteEvent(AwsModel):
+class WebSocketRouteEvent(Apigw2Model):
     headers: dict[str, str] = {}
     multi_value_headers: dict[str, list[str]] = {}
 
@@ -67,18 +59,3 @@ class ConnectEvent(WebSocketRouteEvent):
     multi_value_query_string_parameters: dict[str, list[str]] = {}
 
     stage_variables: dict[str, str] = {}
-
-
-def ws_handler(fn):
-    spec = getfullargspec(fn)
-
-    assert len(spec.args) == 1
-    req_type = spec.annotations.get(spec.args[0])
-    assert isinstance(req_type, type) and issubclass(req_type, BaseModel)
-
-    @wraps(fn)
-    def wrapper(event: dict, ctx: dict):
-        req = req_type.model_validate(event)
-        return fn(req)
-
-    return wrapper

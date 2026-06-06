@@ -8,6 +8,7 @@ import * as apigwv2Auth from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as iam from "aws-cdk-lib/aws-iam";
 
 export class PeuzonStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -24,10 +25,8 @@ export class PeuzonStack extends cdk.Stack {
 
     const bucket = new s3.Bucket(this, "Peuzon");
 
-    const restApi = new apigwv2.HttpApi(this, "RestApi");
-
     const assetReqs = "/asset-output/requirements.txt";
-    const layer = new lambda.LayerVersion(this, "depsLayer", {
+    const depsLayer = new lambda.LayerVersion(this, "depsLayer", {
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_13],
       code: lambda.Code.fromAsset(`${__dirname}/src`, {
         bundling: {
@@ -55,23 +54,38 @@ export class PeuzonStack extends cdk.Stack {
       }),
     });
 
-    const wsAuth = this.createHandler("ws.auth", {
-      environment: {
-        SESSIONS_TABLE: sessionsTable.tableName,
-      },
-      layers: [layer],
-    });
-    const wsConnect = this.createHandler("ws.connect");
-    const wsDisconnect = this.createHandler("ws.disconnect", {
-      environment: {
-        SESSIONS_TABLE: sessionsTable.tableName,
-      },
-      layers: [layer],
-    });
-    const wsDefault = this.createHandler("ws.default");
+    const createHandler = (name: string, opts?: FunctionOpts) => {
+      const func = new lambda.Function(this, `${name}Handler`, {
+        runtime: lambda.Runtime.PYTHON_3_13,
+        code: lambda.Code.fromAsset(`${__dirname}/src`, {
+          exclude: [".venv", ".flake8", "scripts", "**/__pycache__/**", "**/*.pyc"],
+          ignoreMode: cdk.IgnoreMode.GIT,
+        }),
+        handler: `peuzon.handlers.${name}`,
+        timeout: cdk.Duration.seconds(29),
+        layers: [depsLayer],
+        ...opts,
+      });
 
-    sessionsTable.grantReadWriteData(wsAuth);
-    sessionsTable.grantReadWriteData(wsDisconnect);
+      (opts?.grants ?? []).forEach(grant => grant(func));
+
+      return func;
+    };
+
+    const wsAuth = createHandler("ws.auth", {
+      environment: {
+        SESSIONS_TABLE: sessionsTable.tableName,
+      },
+      grants: [f => sessionsTable.grantReadWriteData(f)],
+    });
+    const wsConnect = createHandler("ws.connect");
+    const wsDisconnect = createHandler("ws.disconnect", {
+      environment: {
+        SESSIONS_TABLE: sessionsTable.tableName,
+      },
+      grants: [f => sessionsTable.grantReadWriteData(f)],
+    });
+    const wsDefault = createHandler("ws.default");
 
     const wsApi = new apigwv2.WebSocketApi(this, "WebSocketApi", {
       connectRouteOptions: {
@@ -97,35 +111,85 @@ export class PeuzonStack extends cdk.Stack {
       autoDeploy: true,
     });
 
-    new cdk.CfnOutput(this, "RestApiUrl", {
-      value: restApi.apiEndpoint,
+    const apiKeysTable = new dynamodb.Table(this, "APIKeys", {
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      partitionKey: {
+        name: "hash",
+        type: dynamodb.AttributeType.STRING,
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    new cdk.CfnOutput(this, "WebSocketUrl", {
-      value: wsStage.url,
+    const restApi = new apigwv2.HttpApi(this, "RestApi", {
+      defaultAuthorizer: new apigwv2Auth.HttpLambdaAuthorizer(
+        "RestAuth",
+        createHandler("rest.auth", {
+          environment: {
+            API_KEYS_TABLE: apiKeysTable.tableName,
+          },
+          grants: [f => apiKeysTable.grantReadData(f)],
+        }),
+        {
+          responseTypes: [apigwv2Auth.HttpLambdaResponseType.SIMPLE],
+          resultsCacheTtl: cdk.Duration.seconds(0),
+        },
+      ),
+      corsPreflight: {
+        allowHeaders: ["Authorization"],
+        allowMethods: [
+          apigwv2.CorsHttpMethod.GET,
+          apigwv2.CorsHttpMethod.HEAD,
+          apigwv2.CorsHttpMethod.OPTIONS,
+          apigwv2.CorsHttpMethod.POST,
+        ],
+        allowOrigins: ["*"],
+        maxAge: cdk.Duration.days(10),
+      },
     });
 
-    new cdk.CfnOutput(this, "SessionsTableName", {
-      value: sessionsTable.tableName,
+    restApi.addRoutes({
+      path: "/sessions",
+      integration: new apigwv2Int.HttpLambdaIntegration(
+        "RestCreateSessionInteg",
+        createHandler("rest.create_session", {
+          environment: {
+            SESSIONS_TABLE: sessionsTable.tableName,
+          },
+          grants: [f => sessionsTable.grantReadWriteData(f)],
+        }),
+      ),
+      methods: [apigwv2.HttpMethod.POST],
     });
 
-    new cdk.CfnOutput(this, "BucketName", {
-      value: bucket.bucketName,
+    restApi.addRoutes({
+      path: "/sessions/{id}/points",
+      integration: new apigwv2Int.HttpLambdaIntegration(
+        "RestAddPointInteg",
+        createHandler("rest.add_point", {
+          environment: {
+            SESSIONS_TABLE: sessionsTable.tableName,
+            WS_CALLBACK_URL: wsStage.callbackUrl,
+          },
+          grants: [f => sessionsTable.grantReadWriteData(f), f => wsApi.grantManageConnections(f)],
+        }),
+      ),
+      methods: [apigwv2.HttpMethod.POST],
+    });
+
+    Object.entries({
+      RestApiUrl: restApi.apiEndpoint,
+      WebSocketUrl: wsStage.url,
+      SessionsTableName: sessionsTable.tableName,
+      ApiKeysTableName: apiKeysTable.tableName,
+      BucketName: bucket.bucketName,
+    }).forEach(([k, v]) => {
+      new cdk.CfnOutput(this, k, { value: v });
     });
   }
+}
 
-  private createHandler(name: string, opts?: lambda.FunctionOptions) {
-    return new lambda.Function(this, `${name}Handler`, {
-      runtime: lambda.Runtime.PYTHON_3_13,
-      code: lambda.Code.fromAsset(`${__dirname}/src`, {
-        exclude: [".venv", ".flake8", "**/__pycache__/**", "**/*.pyc"],
-        ignoreMode: cdk.IgnoreMode.GIT,
-      }),
-      handler: `peuzon.${name}.handler`,
-      timeout: cdk.Duration.seconds(29),
-      ...opts,
-    });
-  }
+interface FunctionOpts extends lambda.FunctionOptions {
+  grants?: ((grantee: iam.IGrantable) => void)[];
 }
 
 const app = new cdk.App();
