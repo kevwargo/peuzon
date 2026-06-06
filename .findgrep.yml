@@ -20,6 +20,8 @@ exclude-paths:
   venv:
     disabled: true
 ignore-files:
+  js:
+    disabled: true
   tests:
     disabled: true
 select-files:
