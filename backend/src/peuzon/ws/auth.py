@@ -1,3 +1,4 @@
+import json
 import os
 
 import boto3
@@ -27,6 +28,8 @@ def handler(event: AuthorizerEvent):
             if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
                 raise
 
+            print(f"session {sess_id} is invalid")
+
             return generate_response(False, event.method_arn)
     except Exception as e:
         print(f"{type(e).__name__}({e})")
@@ -35,7 +38,7 @@ def handler(event: AuthorizerEvent):
 
 
 def generate_response(allow: bool, method_arn: str, context=None):
-    return {
+    resp = {
         "principalId": "user",
         "policyDocument": {
             "Version": "2012-10-17",
@@ -48,3 +51,7 @@ def generate_response(allow: bool, method_arn: str, context=None):
             ],
         },
     } | ({"context": context} if context else {})
+
+    print(json.dumps(resp))
+
+    return resp

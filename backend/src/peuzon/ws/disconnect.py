@@ -14,7 +14,7 @@ def handler(event: WebSocketRouteEvent):
 
         TABLE.update_item(
             Key={"sessionId": sess_id},
-            UpdateExpression="ADD subscribers :s",
+            UpdateExpression="DELETE subscribers :s",
             ExpressionAttributeValues={":s": {event.request_context.connection_id}},
         )
 
