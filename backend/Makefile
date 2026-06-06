@@ -7,3 +7,7 @@ deploy:
 .PHONY: synth
 synth:
 	npx cdk synth '*' >/dev/null
+
+.PHONY: bootstrap
+bootstrap:
+	npx cdk bootstrap
