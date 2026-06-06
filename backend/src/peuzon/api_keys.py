@@ -5,7 +5,7 @@ from hashlib import sha256
 
 def encode(secret: str) -> str:
     binhash = sha256(secret.encode()).digest()
-    return urlsafe_b64encode(binhash).decode()
+    return urlsafe_b64encode(binhash).decode().rstrip("=")
 
 
 def generate(table=None) -> str:

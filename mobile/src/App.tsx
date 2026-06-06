@@ -8,11 +8,12 @@
 import Geolocation, { GeolocationResponse } from "@react-native-community/geolocation";
 import { useEffect, useState } from "react";
 import { Button, Platform, StyleSheet, Text as RNText, TextProps, View } from "react-native";
+import * as env from "../env.json";
 
 function App() {
   return (
     <View style={styles.container}>
-      <Text>Platform: {Platform.Version}</Text>
+      <Text>URL: {env.API_URL}</Text>
       <PositionContainer />
     </View>
   );
@@ -23,14 +24,32 @@ function PositionContainer() {
   const [msg, setMsg] = useState<string | null>(null);
   const [watchId, setWatchId] = useState<number | null>(null);
 
-  const startWatch = () => {
+  const startWatch = async () => {
     try {
+      console.log("creating session...");
+      const sessResp = await fetch(`${env.API_URL}/sessions`, {
+        method: "POST",
+        headers: { Authorization: env.API_KEY },
+      });
+      const sessId = await sessResp.text();
+      console.log(`Session ${sessId} created`);
+
       console.log("starting GPS...");
       const wid = Geolocation.watchPosition(
-        position => {
+        async position => {
           console.log("watchPosition", JSON.stringify(position));
           setPos(position);
           setMsg(null);
+          try {
+            const resp = await fetch(`${env.API_URL}/sessions/${sessId}/points`, {
+              method: "POST",
+              headers: { Authorization: env.API_KEY },
+              body: JSON.stringify(position),
+            });
+            console.log("addPoint resp", resp.status, resp.statusText);
+          } catch (err) {
+            console.log(`fetch error ${err}`);
+          }
         },
         error => () => {
           console.error("WatchPosition Error", JSON.stringify(error));
@@ -45,8 +64,8 @@ function PositionContainer() {
       );
       setWatchId(wid);
     } catch (error) {
-      console.error("WatchPosition Error", JSON.stringify(error));
-      setMsg(`WatchPosition exception: ${JSON.stringify(error)}`);
+      console.error("Exception", JSON.stringify(error));
+      setMsg(`Exception: ${JSON.stringify(error)}`);
     }
   };
 

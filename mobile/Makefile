@@ -1,5 +1,15 @@
-.PHONY: build
-build:
+.PHONY: build install run-android ensure-env start-metro
+
+ensure-env:
+	uv run --directory ../backend/src python -m scripts.export_env $(shell realpath env.json)
+
+start-metro:
+	npm run start
+
+run-android: ensure-env
+	npm run android
+
+build: ensure-env
 	mkdir -p android/app/src/main/assets
 	npx react-native bundle \
 		--platform android \
