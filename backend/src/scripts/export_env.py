@@ -13,6 +13,7 @@ def main(env_file: Path):
     env = json.loads(env_file.read_text()) if env_file.exists() else {}
     outputs = json.loads(OUTPUTS_FILE.read_text())["PeuzonStack"]
     env["API_URL"] = outputs["RestApiUrl"]
+    env["WEBSITE_URL"] = outputs["WebsiteUrl"]
 
     if not env.get("API_KEY"):
         print(f"API key is not defined in {env_file}, generating new one ...")

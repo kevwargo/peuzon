@@ -23,7 +23,21 @@ export class PeuzonStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    const bucket = new s3.Bucket(this, "Peuzon");
+    const bucket = new s3.Bucket(this, "Peuzon", {
+      blockPublicAccess: new s3.BlockPublicAccess({
+        blockPublicAcls: false,
+        blockPublicPolicy: false,
+        ignorePublicAcls: false,
+        restrictPublicBuckets: false,
+      }),
+    });
+    bucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        principals: [new iam.AnyPrincipal()],
+        actions: ["s3:GetObject"],
+        resources: [bucket.arnForObjects("*")],
+      }),
+    );
 
     const assetReqs = "/asset-output/requirements.txt";
     const depsLayer = new lambda.LayerVersion(this, "depsLayer", {
@@ -182,8 +196,9 @@ export class PeuzonStack extends cdk.Stack {
       SessionsTableName: sessionsTable.tableName,
       ApiKeysTableName: apiKeysTable.tableName,
       BucketName: bucket.bucketName,
-    }).forEach(([k, v]) => {
-      new cdk.CfnOutput(this, k, { value: v });
+      WebsiteUrl: `https://${bucket.bucketRegionalDomainName}/index.html`,
+    }).forEach(([key, value]) => {
+      new cdk.CfnOutput(this, key, { value });
     });
   }
 }

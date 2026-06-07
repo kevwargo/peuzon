@@ -3,6 +3,10 @@ exclude-paths:
     alias: B
     default: true
     pattern: build
+  dist:
+    alias: D
+    default: true
+    pattern: dist
   cover:
     disabled: true
   cxx:
