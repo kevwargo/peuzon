@@ -1,8 +1,8 @@
+import L from "leaflet";
 import { useEffect, useRef } from "react";
 import { useMap } from "react-leaflet";
-import L from "leaflet";
 
-function Tracker({ start, setGPSHandler }: TrackerProps) {
+function Tracker({ start, registerGPSListener }: TrackerProps) {
   const traceRef = useRef<L.Polyline | null>(null);
   const posRef = useRef<L.Marker | null>(null);
 
@@ -14,7 +14,7 @@ function Tracker({ start, setGPSHandler }: TrackerProps) {
     }).addTo(map);
     posRef.current = L.marker(start).addTo(map);
 
-    setGPSHandler(msg => {
+    const unregisterGPSListener = registerGPSListener(msg => {
       console.log("added wpt", msg.pos);
       traceRef.current?.addLatLng(msg.pos);
       posRef.current?.setLatLng(msg.pos);
@@ -23,8 +23,9 @@ function Tracker({ start, setGPSHandler }: TrackerProps) {
     return () => {
       traceRef.current?.remove();
       posRef.current?.remove();
+      unregisterGPSListener();
     };
-  }, [map, start, setGPSHandler]);
+  }, [map, start, registerGPSListener]);
 
   return null;
 }
@@ -41,7 +42,7 @@ export interface Pos {
 
 export interface TrackerProps {
   start: Pos;
-  setGPSHandler: (handler: (msg: GPSMsg) => void) => void;
+  registerGPSListener: (handler: (msg: GPSMsg) => void) => () => void;
 }
 
 export default Tracker;
