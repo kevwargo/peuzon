@@ -1,6 +1,6 @@
-import { format } from "date-fns";
 import { useCallback, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text } from "react-native";
+import dt from "./dt";
 
 function LogView({ entries }: LogViewProps) {
   const scrollViewRef = useRef<ScrollView>(null);
@@ -24,7 +24,7 @@ function LogView({ entries }: LogViewProps) {
       }}
     >
       {entries.map((e, i) => (
-        <Text style={styles.text} key={i}>
+        <Text style={styles.msg} key={i}>
           {e}
         </Text>
       ))}
@@ -33,7 +33,7 @@ function LogView({ entries }: LogViewProps) {
 }
 
 const styles = StyleSheet.create({
-  text: {
+  msg: {
     color: "white",
   },
 });
@@ -46,7 +46,7 @@ export function useLog() {
   const [entries, setEntries] = useState<string[]>([]);
 
   const addEntry = useCallback((entry: string) => {
-    setEntries(old => [...old, `[${format(new Date(), "yyyy-MM-dd HH:mm:ss.SSS")}] ${entry}`]);
+    setEntries(old => [...old, `[${dt()}] ${entry}`]);
   }, []);
 
   return { entries, log: addEntry };

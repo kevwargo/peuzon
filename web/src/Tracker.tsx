@@ -15,9 +15,12 @@ function Tracker({ start, registerGPSListener }: TrackerProps) {
     posRef.current = L.marker(start).addTo(map);
 
     const unregisterGPSListener = registerGPSListener(msg => {
-      console.log("added wpt", msg.pos);
+      console.log("added wpt", msg.pos, new Date(msg.timestamp));
       traceRef.current?.addLatLng(msg.pos);
       posRef.current?.setLatLng(msg.pos);
+      map.panInside(msg.pos, {
+        animate: true,
+      });
     });
 
     return () => {
