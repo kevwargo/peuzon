@@ -18,9 +18,6 @@ function Tracker({ start, registerGPSListener }: TrackerProps) {
       console.log("added wpt", msg.pos, new Date(msg.timestamp));
       traceRef.current?.addLatLng(msg.pos);
       posRef.current?.setLatLng(msg.pos);
-      map.panInside(msg.pos, {
-        animate: true,
-      });
     });
 
     return () => {
