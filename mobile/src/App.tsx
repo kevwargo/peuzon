@@ -6,20 +6,30 @@
  */
 
 import Geolocation, { GeolocationResponse } from "@react-native-community/geolocation";
-import { useEffect, useRef, useState } from "react";
-import { Button, Linking, StyleSheet, Text as RNText, TextProps, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Button, Linking, Text as RNText, StyleSheet, TextProps, View } from "react-native";
 import env from "../env.json";
+import LogView, { useLog } from "./LogView";
 
 function App() {
+  const { entries, log } = useLog();
+  const [ih, setIH] = useState<number | null>(null);
+
+  const start = () => setIH(setInterval(() => log(new Date().toLocaleString("fi")), 450));
+
   return (
     <View style={styles.container}>
-      <Text>URL: {env.API_URL}</Text>
-      <PositionContainer />
+      {ih === null ? (
+        <Button onPress={start} title="start" />
+      ) : (
+        <Button onPress={() => clearInterval(ih)} title="stop" />
+      )}
+      <LogView entries={entries} />
     </View>
   );
 }
 
-function PositionContainer() {
+export function PositionContainer() {
   const [pos, setPos] = useState<GeolocationResponse | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [watchId, setWatchId] = useState<number | null>(null);
@@ -97,18 +107,18 @@ function PositionContainer() {
     }
   };
 
-  const clearWatch = () => {
+  const clearWatch = useCallback(() => {
     watchId !== null && Geolocation.clearWatch(watchId);
     setWatchId(null);
     setPos(null);
     setMsg(null);
-  };
+  }, [watchId]);
 
   useEffect(() => {
     return () => {
       clearWatch();
     };
-  }, []);
+  }, [clearWatch]);
 
   return (
     <View>
