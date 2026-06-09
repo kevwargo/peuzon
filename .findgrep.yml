@@ -28,6 +28,9 @@ ignore-files:
     disabled: true
   tests:
     disabled: true
+  bundle:
+    pattern: index.android.bundle
+    default: true
 select-files:
   elisp:
     disabled: true

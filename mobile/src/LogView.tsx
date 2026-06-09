@@ -3,23 +3,27 @@ import { ScrollView, StyleSheet, Text } from "react-native";
 import dt from "./dt";
 
 function LogView({ entries }: LogViewProps) {
-  const scrollViewRef = useRef<ScrollView>(null);
-  const isNearBottom = useRef(true);
+  const scrollRef = useRef<ScrollView>(null);
+  const bottomRef = useRef(true);
   const bottomThreshold = 50;
 
   return (
     <ScrollView
-      ref={scrollViewRef}
+      style={styles.wrap}
+      ref={scrollRef}
       onScroll={e => {
-        const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+        const {
+          contentOffset: offset,
+          contentSize: size,
+          layoutMeasurement: layout,
+        } = e.nativeEvent;
 
-        isNearBottom.current =
-          contentOffset.y + layoutMeasurement.height >= contentSize.height - bottomThreshold;
+        bottomRef.current = offset.y + layout.height >= size.height - bottomThreshold;
       }}
       scrollEventThrottle={16}
       onContentSizeChange={() => {
-        if (isNearBottom.current) {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
+        if (bottomRef.current) {
+          scrollRef.current?.scrollToEnd({ animated: true });
         }
       }}
     >
@@ -33,6 +37,10 @@ function LogView({ entries }: LogViewProps) {
 }
 
 const styles = StyleSheet.create({
+  wrap: {
+    backgroundColor: "#56ac4d",
+    padding: 15,
+  },
   msg: {
     color: "white",
   },

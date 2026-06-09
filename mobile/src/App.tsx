@@ -49,10 +49,11 @@ function Text(props: TextProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    margin: 15,
+    padding: 15,
+    backgroundColor: "#d1f101",
   },
   text: {
-    color: "white",
+    color: "#994ce5",
   },
 });
 
