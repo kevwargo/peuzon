@@ -8,7 +8,6 @@ start-metro:
 
 run-android: ensure-env
 	npm run android
-	adb logcat -T 10 '*:S' ReactNativeJS:V
 
 build: ensure-env
 	mkdir -p android/app/src/main/assets
