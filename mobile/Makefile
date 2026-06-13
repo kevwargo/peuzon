@@ -1,7 +1,7 @@
-.PHONY: build install run-android ensure-env start-metro
+.PHONY: build install run-android ensure-env start-metro logcat start-android
 
 ensure-env:
-	uv run --directory ../backend/src python -m scripts.export_env $(shell realpath env.json)
+	uv run --directory ../backend/src python -m scripts.export_env $(PWD)
 
 start-metro:
 	npm run start
@@ -19,4 +19,10 @@ build: ensure-env
 	cd android && ./gradlew assembleDebug
 
 install: build
-	adb install android/app/build/outputs/apk/debug/app-debug.apk
+	adb install android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
+
+logcat:
+	adb logcat --pid $(shell adb shell pidof com.peuzon)
+
+start-android:
+	adb shell am start -S com.peuzon/.MainActivity

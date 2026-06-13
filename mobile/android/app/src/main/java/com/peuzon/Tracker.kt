@@ -1,16 +1,16 @@
 package com.peuzon
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.Manifest
+import android.location.Location
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
+import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
 import android.util.Log
@@ -23,76 +23,91 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
-import java.text.SimpleDateFormat
-import java.util.Date
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+import java.util.Collections
 
 class Tracker : Service() {
 
     companion object {
-        private const val TAG = "TrackingService"
-        private const val CHANNEL_ID = "tracking"
+        private const val TAG = "TrackerService"
+
+        private const val CHANNEL_ID = "gps_tracking"
         private const val NOTIFICATION_ID = 1
+
+        private const val LOCATION_INTERVAL_MS = 10_000L
+        private const val FLUSH_INTERVAL_MS = 10_000L
+        private const val MAX_BATCH_SIZE = 100
     }
 
-    private val client = OkHttpClient()
-    private val dtFmt = SimpleDateFormat("yyyyMMdd-HHmmss.SSS")
-    private val utf8Enc = StandardCharsets.UTF_8.name()
-
     private lateinit var fusedClient: FusedLocationProviderClient
+    private lateinit var wakeLock: PowerManager.WakeLock
+    private lateinit var endpoint: String
+    private val utf8Enc = StandardCharsets.UTF_8.name()
+    private val httpClient = OkHttpClient()
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val pendingLocations = Collections.synchronizedList(mutableListOf<Location>())
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
+            Log.i(TAG, "callback locations=${result.locations.size}")
             for (loc in result.locations) {
-                val msg = "lat=${loc.latitude} lon=${loc.longitude} acc=${loc.accuracy}"
-                Log.i(TAG, msg)
-                logHttp(msg)
+                pendingLocations.add(loc)
+                Log.i(TAG, "loc lat=${loc.latitude} lon=${loc.longitude}")
             }
-        }
-    }
-
-    private val handler = Handler(Looper.getMainLooper())
-
-    private val heartbeat = object : Runnable {
-        override fun run() {
-            val msg = "heartbeat: pid=${Process.myPid()} thread=${Thread.currentThread().name}"
-            Log.i(TAG, msg)
-            logHttp(msg)
-            handler.postDelayed(this, 30_000)
+            if (pendingLocations.size >= MAX_BATCH_SIZE) {
+                serviceScope.launch {
+                    flushLocations()
+                }
+            }
         }
     }
 
     override fun onCreate() {
         super.onCreate()
-        Log.i(TAG, "onCreate")
+
+        Log.i(TAG, "onCreate(${this})")
+
+        val apiUrl = getString(R.string.api_url)
+        val deviceId = URLEncoder.encode(
+            Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID),
+            utf8Enc
+        )
+        endpoint = "$apiUrl/sessions/$deviceId/points"
 
         fusedClient = LocationServices.getFusedLocationProviderClient(this)
-        Log.i(TAG, "onCreate fusedClient $fusedClient")
-
         createNotificationChannel()
+
+        val pm = getSystemService(PowerManager::class.java)
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "${packageName}:tracker")
+        val res = wakeLock.acquire()
+        Log.i(TAG, "lock acquired $res")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.i(TAG, "onStartCommand startId=$startId")
+        Log.i(TAG, "onStartCommand(${this})")
 
-        handler.removeCallbacks(heartbeat)
-        handler.post(heartbeat)
-
-        val allowed = PermissionChecker.checkSelfPermission(
-            this, Manifest.permission.ACCESS_FINE_LOCATION
+        val hasPermission = PermissionChecker.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
         ) == PermissionChecker.PERMISSION_GRANTED
-        if (!allowed) {
+
+        if (!hasPermission) {
             Log.w(TAG, "Location permission missing")
             stopSelf()
             return START_NOT_STICKY
-        } else {
-            Log.i(TAG, "Location watch allowed, calling startForeground()")
         }
 
         ServiceCompat.startForeground(
@@ -101,78 +116,104 @@ class Tracker : Service() {
             buildNotification(),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
         )
+
         startLocationUpdates()
+        startPeriodicUploader()
 
         return START_STICKY
     }
 
     override fun onDestroy() {
-        Log.i(TAG, "onDestroy")
-        handler.removeCallbacks(heartbeat)
+        Log.i(TAG, "onDestroy(${this})")
+
         fusedClient.removeLocationUpdates(locationCallback)
+        serviceScope.cancel()
 
         super.onDestroy()
     }
 
-    override fun onTaskRemoved(intent: Intent) {
-        Log.i(TAG, "onTaskRemove")
-        super.onTaskRemoved(intent)
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun startLocationUpdates() {
+        val request =
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, LOCATION_INTERVAL_MS)
+                .setGranularity(Granularity.GRANULARITY_FINE)
+                .build()
+
+        Log.i(TAG, "subscribing ${locationCallback} to location updates")
+        fusedClient.requestLocationUpdates(request, locationCallback, mainLooper)
     }
 
-    override fun onTimeout(startId: Int, fgsType: Int) {
-        Log.i(TAG, "onTimeout($startId, $fgsType)")
-        super.onTimeout(startId, fgsType)
-    }
-
-    override fun onTimeout(startId: Int) {
-        Log.i(TAG, "onTimeout($startId)")
-        super.onTimeout(startId)
-    }
-
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
-    }
-
-    private fun logHttp(msg: String) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val timestamp = URLEncoder.encode(dtFmt.format(Date()), utf8Enc)
-                val deviceId = URLEncoder.encode(
-                    Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID),
-                    utf8Enc
-                )
-                val url = "http://192.168.1.220:8181/$deviceId/$timestamp"
-
-                val request = Request.Builder().url(url).get().build()
-
-                client.newCall(request).execute().use { response ->
-                    if (response.code > 399) {
-                        Log.w(TAG, "log api HTTP ${response.code}")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "log api exception $e")
+    private fun startPeriodicUploader() {
+        serviceScope.launch {
+            Log.i(TAG, "starting flushLocations() loop")
+            while (true) {
+                delay(FLUSH_INTERVAL_MS)
+                flushLocations()
             }
         }
     }
 
-    private fun startLocationUpdates() {
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000L)
-            .setGranularity(Granularity.GRANULARITY_FINE)
-            .setMinUpdateDistanceMeters(5.0f)
-            .build()
+    private fun flushLocations() {
+        val batch: List<Location>
+        synchronized(pendingLocations) {
+            if (pendingLocations.isEmpty()) {
+                Log.i(TAG, "skipping empty locations list flush")
+                return
+            }
+            Log.i(TAG, "flushing ${pendingLocations.size} locations")
+            batch = pendingLocations.toList()
+            pendingLocations.clear()
+        }
 
-        fusedClient.requestLocationUpdates(
-            request,
-            locationCallback,
-            mainLooper
-        )
+        try {
+            val payload = JSONArray()
+
+            for (loc in batch) {
+                val obj = JSONObject()
+                    .put("pid", Process.myPid())
+                    .put("tid", Process.myTid())
+                    .put("ts", loc.time)
+                    .put("lat", loc.latitude)
+                    .put("lng", loc.longitude)
+                    .put("acc", loc.accuracy)
+                    .put("alt", loc.altitude)
+                    .put("speed", loc.speed)
+                    .put("bearing", loc.bearing)
+                payload.put(obj)
+            }
+
+            val body = payload.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url(endpoint)
+                .header("Authorization", getString(R.string.api_key))
+                .post(body)
+                .build()
+
+            httpClient.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    Log.w(TAG, "upload failed: [${resp.code}] ${resp.body?.string()}")
+                } else {
+                    Log.i(TAG, "uploaded ${batch.size} locations")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "upload exception", e)
+            pendingLocations.addAll(batch)
+        }
     }
 
     private fun buildNotification(): Notification {
+        val packageInfo = if (Build.VERSION.SDK_INT >= 33) {
+            packageManager.getPackageInfo(packageName, 0)
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, 0)
+        }
+
         return Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("Tracking active")
-            .setContentText("Receiving GPS updates")
+            .setContentTitle("GPS Tracking")
+            .setContentText("Tracking and sending realtime location (${packageInfo.versionName})")
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .build()
     }
@@ -182,13 +223,9 @@ class Tracker : Service() {
             return
         }
 
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Location tracking",
-            NotificationManager.IMPORTANCE_LOW
-        )
-
-        val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(channel)
+        val channel =
+            NotificationChannel(CHANNEL_ID, "GPS Tracking", NotificationManager.IMPORTANCE_LOW)
+        getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(channel)
     }
 }

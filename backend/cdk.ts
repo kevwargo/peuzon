@@ -22,6 +22,18 @@ export class PeuzonStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+    const tracesTable = new dynamodb.Table(this, "Traces", {
+      partitionKey: {
+        name: "sessionId",
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: "timestamp",
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
 
     const bucket = new s3.Bucket(this, "Peuzon", {
       blockPublicAccess: new s3.BlockPublicAccess({
@@ -182,9 +194,14 @@ export class PeuzonStack extends cdk.Stack {
         createHandler("rest.add_point", {
           environment: {
             SESSIONS_TABLE: sessionsTable.tableName,
+            TRACES_TABLE: tracesTable.tableName,
             WS_CALLBACK_URL: wsStage.callbackUrl,
           },
-          grants: [f => sessionsTable.grantReadWriteData(f), f => wsApi.grantManageConnections(f)],
+          grants: [
+            f => sessionsTable.grantReadWriteData(f),
+            f => wsApi.grantManageConnections(f),
+            f => tracesTable.grantReadWriteData(f),
+          ],
         }),
       ),
       methods: [apigwv2.HttpMethod.POST],
@@ -194,6 +211,7 @@ export class PeuzonStack extends cdk.Stack {
       RestApiUrl: restApi.apiEndpoint,
       WebSocketUrl: wsStage.url,
       SessionsTableName: sessionsTable.tableName,
+      TracesTableName: tracesTable.tableName,
       ApiKeysTableName: apiKeysTable.tableName,
       BucketName: bucket.bucketName,
       WebsiteUrl: `https://${bucket.bucketRegionalDomainName}/index.html`,

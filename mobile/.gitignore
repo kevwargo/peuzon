@@ -15,6 +15,7 @@ local.properties
 android/app/src/main/assets/
 android/app/src/main/res/drawable-mdpi/
 android/app/src/main/res/raw/
+android/app/src/main/res/values/api.xml
 
 # node.js
 #
