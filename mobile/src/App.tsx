@@ -32,6 +32,8 @@ function App() {
 
   return (
     <View style={styles.container}>
+      <Button title="show batex" onPress={Tracker.showBatteryExemptions} />
+      <Button title="request batex" onPress={Tracker.requestBatteryExemption} />
       {started ? (
         <Button disabled={loading} title="Stop FGS" onPress={createCallback(Tracker.stop, false)} />
       ) : (

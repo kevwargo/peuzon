@@ -2,7 +2,9 @@ package com.peuzon
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import androidx.core.content.PermissionChecker
 
@@ -52,7 +54,39 @@ class TrackModule(private val rctx: ReactApplicationContext) : ReactContextBaseJ
             rctx.stopService(intent)
             promise.resolve(null)
         } catch (e: Exception) {
-            promise.reject("STOP_FAILED", e)
+            promise.reject("TRACK_STOP_FAILED", e)
+        }
+    }
+
+    @ReactMethod
+    fun showBatteryExemptions(promise: Promise) {
+        try {
+            val intent = Intent(
+                Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS,
+                Uri.parse("package:${rctx.packageName}")
+            )
+            val act = rctx.currentActivity!!
+            act.startActivity(intent)
+
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("SHOW_BATEXEMPT_FAILED", e)
+        }
+    }
+
+    @ReactMethod
+    fun requestBatteryExemption(promise: Promise) {
+        try {
+            val intent = Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:${rctx.packageName}")
+            )
+            val act = rctx.currentActivity!!
+            act.startActivity(intent)
+
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("REQUEST_BATEXEMPT_FAILED", e)
         }
     }
 }

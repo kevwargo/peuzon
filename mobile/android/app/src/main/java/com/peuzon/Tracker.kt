@@ -92,8 +92,13 @@ class Tracker : Service() {
 
         val pm = getSystemService(PowerManager::class.java)
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "${packageName}:tracker")
-        val res = wakeLock.acquire()
-        Log.i(TAG, "lock acquired $res")
+        wakeLock.acquire()
+
+        val ignBatOpt = pm.isIgnoringBatteryOptimizations(packageName)
+        Log.i(TAG, "ignoring battery optimizations: ${ignBatOpt}")
+        if (!ignBatOpt) {
+
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
