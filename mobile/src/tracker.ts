@@ -3,7 +3,7 @@ import { NativeModules, PermissionsAndroid } from "react-native";
 const intTracker = NativeModules.LocTrack as {
   startTracking: () => Promise<void>;
   stopTracking: () => Promise<void>;
-  showBatteryExemptions: () => Promise<void>;
+  isBatteryThrottled: () => Promise<boolean>;
   requestBatteryExemption: () => Promise<void>;
 };
 
@@ -14,29 +14,18 @@ const locationGranted = async (): Promise<boolean> => {
 const Tracker = {
   start: async (): Promise<void> => {
     if (!(await locationGranted())) {
-      const result = await PermissionsAndroid.request(
+      const result = await PermissionsAndroid.requestMultiple([
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-      );
-      console.log(`Location request result: ${result}`);
+        PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
+      ]);
+      console.log(`Location request result: ${JSON.stringify(result)}`);
     }
 
     return await intTracker.startTracking();
   },
   stop: intTracker.stopTracking,
-  showBatteryExemptions: async () => {
-    try {
-      await intTracker.showBatteryExemptions();
-    } catch (e) {
-      console.error(e);
-    }
-  },
-  requestBatteryExemption: async () => {
-    try {
-      await intTracker.requestBatteryExemption();
-    } catch (e) {
-      console.error(e);
-    }
-  },
+  isBatteryThrottled: intTracker.isBatteryThrottled,
+  requestBatteryExemption: intTracker.requestBatteryExemption,
 };
 
 export default Tracker;

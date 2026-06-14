@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.PermissionChecker
@@ -59,18 +60,12 @@ class TrackModule(private val rctx: ReactApplicationContext) : ReactContextBaseJ
     }
 
     @ReactMethod
-    fun showBatteryExemptions(promise: Promise) {
+    fun isBatteryThrottled(promise: Promise) {
         try {
-            val intent = Intent(
-                Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS,
-                Uri.parse("package:${rctx.packageName}")
-            )
-            val act = rctx.currentActivity!!
-            act.startActivity(intent)
-
-            promise.resolve(null)
+            val pm = rctx.getSystemService(PowerManager::class.java)
+            promise.resolve(!pm.isIgnoringBatteryOptimizations(rctx.packageName))
         } catch (e: Exception) {
-            promise.reject("SHOW_BATEXEMPT_FAILED", e)
+            promise.reject("CHECK_BATEXEMPT_FAILED", e)
         }
     }
 
