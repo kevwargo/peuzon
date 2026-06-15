@@ -2,18 +2,17 @@ import json
 from base64 import b64decode
 from functools import cached_property
 
-from peuzon.models import Apigw2Model
+from peuzon.models import AwsModel
 
 
-class AuthorizerEvent(Apigw2Model):
+class AuthorizerEvent(AwsModel):
     identity_source: list[str]
 
 
-class HttpRouteEvent(Apigw2Model):
+class HttpRouteEvent(AwsModel):
     headers: dict[str, str] = {}
     query_string_parameters: dict[str, str] = {}
     path_parameters: dict[str, str] = {}
-
     is_base64_encoded: bool = False
     body: str | None = None
 
@@ -24,3 +23,7 @@ class HttpRouteEvent(Apigw2Model):
             body = b64decode(body)
 
         return json.loads(body)
+
+    @cached_property
+    def session_id(self) -> str:
+        return self.path_parameters["sessId"]

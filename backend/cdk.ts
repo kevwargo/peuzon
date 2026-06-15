@@ -2,13 +2,15 @@ import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 
 import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
-import * as apigwv2Int from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as apigwv2Auth from "aws-cdk-lib/aws-apigatewayv2-authorizers";
+import * as apigwv2Int from "aws-cdk-lib/aws-apigatewayv2-integrations";
 
-import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
-import * as s3 from "aws-cdk-lib/aws-s3";
 import * as iam from "aws-cdk-lib/aws-iam";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as lambdaEvents from "aws-cdk-lib/aws-lambda-event-sources";
+import * as s3 from "aws-cdk-lib/aws-s3";
+import * as sqs from "aws-cdk-lib/aws-sqs";
 
 export class PeuzonStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -16,13 +18,13 @@ export class PeuzonStack extends cdk.Stack {
 
     const sessionsTable = new dynamodb.Table(this, "Sessions", {
       partitionKey: {
-        name: "sessionId",
+        name: "id",
         type: dynamodb.AttributeType.STRING,
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
-    const tracesTable = new dynamodb.Table(this, "Traces", {
+    const locationsTable = new dynamodb.Table(this, "Locations", {
       partitionKey: {
         name: "sessionId",
         type: dynamodb.AttributeType.STRING,
@@ -55,6 +57,10 @@ export class PeuzonStack extends cdk.Stack {
     const depsLayer = new lambda.LayerVersion(this, "depsLayer", {
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_13],
       code: lambda.Code.fromAsset(`${__dirname}/src`, {
+        assetHash: cdk.FileSystem.fingerprint(`${__dirname}/src`, {
+          ignoreMode: cdk.IgnoreMode.GIT,
+          exclude: ["*", "!pyproject.toml", "!uv.lock"],
+        }),
         bundling: {
           image: cdk.DockerImage.fromRegistry("ghcr.io/astral-sh/uv:python3.13-bookworm"),
           command: [
@@ -80,6 +86,10 @@ export class PeuzonStack extends cdk.Stack {
       }),
     });
 
+    const locationSenderQueue = new sqs.Queue(this, "LocationSender", {
+      visibilityTimeout: cdk.Duration.minutes(15),
+    });
+
     const createHandler = (name: string, opts?: FunctionOpts) => {
       const func = new lambda.Function(this, `${name}Handler`, {
         runtime: lambda.Runtime.PYTHON_3_13,
@@ -93,41 +103,53 @@ export class PeuzonStack extends cdk.Stack {
         ...opts,
       });
 
-      (opts?.grants ?? []).forEach(grant => grant(func));
+      if (opts?.apply) {
+        opts.apply(func);
+      }
 
       return func;
     };
 
-    const wsAuth = createHandler("ws.auth", {
-      environment: {
-        SESSIONS_TABLE: sessionsTable.tableName,
-      },
-      grants: [f => sessionsTable.grantReadWriteData(f)],
-    });
-    const wsConnect = createHandler("ws.connect");
-    const wsDisconnect = createHandler("ws.disconnect", {
-      environment: {
-        SESSIONS_TABLE: sessionsTable.tableName,
-      },
-      grants: [f => sessionsTable.grantReadWriteData(f)],
-    });
-    const wsDefault = createHandler("ws.default");
-
     const wsApi = new apigwv2.WebSocketApi(this, "WebSocketApi", {
       connectRouteOptions: {
-        authorizer: new apigwv2Auth.WebSocketLambdaAuthorizer("wsAuth", wsAuth, {
-          identitySource: ["route.request.querystring.s"],
-        }),
-        integration: new apigwv2Int.WebSocketLambdaIntegration("ConnectIntegration", wsConnect),
+        authorizer: new apigwv2Auth.WebSocketLambdaAuthorizer(
+          "wsAuth",
+          createHandler("ws.auth", {
+            environment: {
+              SESSIONS_TABLE: sessionsTable.tableName,
+            },
+            apply: f => sessionsTable.grantReadWriteData(f),
+          }),
+          {
+            identitySource: ["route.request.querystring.s"],
+          },
+        ),
+        integration: new apigwv2Int.WebSocketLambdaIntegration(
+          "ConnectIntegration",
+          createHandler("ws.connect", {
+            environment: {
+              LOCATIONS_QUEUE: locationSenderQueue.queueUrl,
+            },
+            apply: f => locationSenderQueue.grantSendMessages(f),
+          }),
+        ),
       },
       disconnectRouteOptions: {
         integration: new apigwv2Int.WebSocketLambdaIntegration(
           "DisconnectIntegration",
-          wsDisconnect,
+          createHandler("ws.disconnect", {
+            environment: {
+              SESSIONS_TABLE: sessionsTable.tableName,
+            },
+            apply: f => sessionsTable.grantReadWriteData(f),
+          }),
         ),
       },
       defaultRouteOptions: {
-        integration: new apigwv2Int.WebSocketLambdaIntegration("DefaultIntegration", wsDefault),
+        integration: new apigwv2Int.WebSocketLambdaIntegration(
+          "DefaultIntegration",
+          createHandler("ws.default"),
+        ),
       },
     });
 
@@ -135,6 +157,19 @@ export class PeuzonStack extends cdk.Stack {
       webSocketApi: wsApi,
       stageName: "prod",
       autoDeploy: true,
+    });
+
+    createHandler("send_locations.handler", {
+      environment: {
+        LOCATIONS_TABLE: locationsTable.tableName,
+        WS_CALLBACK_URL: wsStage.callbackUrl,
+      },
+      timeout: cdk.Duration.minutes(15),
+      apply: f => {
+        f.addEventSource(new lambdaEvents.SqsEventSource(locationSenderQueue));
+        wsApi.grantManageConnections(f);
+        locationsTable.grantReadData(f);
+      },
     });
 
     const apiKeysTable = new dynamodb.Table(this, "APIKeys", {
@@ -153,7 +188,7 @@ export class PeuzonStack extends cdk.Stack {
           environment: {
             API_KEYS_TABLE: apiKeysTable.tableName,
           },
-          grants: [f => apiKeysTable.grantReadData(f)],
+          apply: f => apiKeysTable.grantReadData(f),
         }),
         {
           responseTypes: [apigwv2Auth.HttpLambdaResponseType.SIMPLE],
@@ -176,32 +211,46 @@ export class PeuzonStack extends cdk.Stack {
     restApi.addRoutes({
       path: "/sessions",
       integration: new apigwv2Int.HttpLambdaIntegration(
-        "RestCreateSessionInteg",
+        "CreateSession",
         createHandler("rest.create_session", {
           environment: {
             SESSIONS_TABLE: sessionsTable.tableName,
           },
-          grants: [f => sessionsTable.grantReadWriteData(f)],
+          apply: f => sessionsTable.grantReadWriteData(f),
         }),
       ),
       methods: [apigwv2.HttpMethod.POST],
     });
 
     restApi.addRoutes({
-      path: "/sessions/{id}/points",
+      path: "/sessions/{sessId}/locations",
       integration: new apigwv2Int.HttpLambdaIntegration(
-        "RestAddPointInteg",
-        createHandler("rest.add_point", {
+        "AddLocation",
+        createHandler("rest.add_location", {
           environment: {
             SESSIONS_TABLE: sessionsTable.tableName,
-            TRACES_TABLE: tracesTable.tableName,
+            LOCATIONS_TABLE: locationsTable.tableName,
             WS_CALLBACK_URL: wsStage.callbackUrl,
           },
-          grants: [
-            f => sessionsTable.grantReadWriteData(f),
-            f => wsApi.grantManageConnections(f),
-            f => tracesTable.grantReadWriteData(f),
-          ],
+          apply: f => {
+            sessionsTable.grantReadWriteData(f);
+            wsApi.grantManageConnections(f);
+            locationsTable.grantReadWriteData(f);
+          },
+        }),
+      ),
+      methods: [apigwv2.HttpMethod.POST],
+    });
+
+    restApi.addRoutes({
+      path: "/sessions/{sessId}/heartbeat",
+      integration: new apigwv2Int.HttpLambdaIntegration(
+        "Heartbeat",
+        createHandler("rest.heartbeat", {
+          environment: {
+            WS_CALLBACK_URL: wsStage.callbackUrl,
+          },
+          apply: f => wsApi.grantManageConnections(f),
         }),
       ),
       methods: [apigwv2.HttpMethod.POST],
@@ -211,7 +260,7 @@ export class PeuzonStack extends cdk.Stack {
       RestApiUrl: restApi.apiEndpoint,
       WebSocketUrl: wsStage.url,
       SessionsTableName: sessionsTable.tableName,
-      TracesTableName: tracesTable.tableName,
+      LocationsTableName: locationsTable.tableName,
       ApiKeysTableName: apiKeysTable.tableName,
       BucketName: bucket.bucketName,
       WebsiteUrl: `https://${bucket.bucketRegionalDomainName}/index.html`,
@@ -222,7 +271,7 @@ export class PeuzonStack extends cdk.Stack {
 }
 
 interface FunctionOpts extends lambda.FunctionOptions {
-  grants?: ((grantee: iam.IGrantable) => void)[];
+  apply?: (f: lambda.IFunction) => void;
 }
 
 const app = new cdk.App();

@@ -1,22 +1,15 @@
 import json
 import os
-from functools import cached_property
 
-import boto3
 from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
-
 from peuzon.api_handler import api_handler
+from peuzon.botores import boto3_resource
+from peuzon.models.location_sender import Message as LocationSenderMessage
 from peuzon.models.ws import AuthorizerEvent, WebSocketRouteEvent
 
-
-class Resources:
-    @cached_property
-    def sessions(self):
-        return boto3.resource("dynamodb").Table(os.getenv("SESSIONS_TABLE"))
-
-
-RESOURCES = Resources()
+SESSIONS = boto3_resource("dynamodb").Table(os.getenv("SESSIONS_TABLE"))
+LOCATIONS_QUEUE = boto3_resource("sqs").Queue(os.getenv("LOCATIONS_QUEUE"))
 
 
 @api_handler
@@ -28,11 +21,11 @@ def auth(event: AuthorizerEvent):
         sess_id = event.query_string_parameters["s"]
 
         try:
-            RESOURCES.sessions.update_item(
-                Key={"sessionId": sess_id},
+            SESSIONS.update_item(
+                Key={"id": sess_id},
                 UpdateExpression="ADD subscribers :s",
                 ExpressionAttributeValues={":s": {event.request_context.connection_id}},
-                ConditionExpression=Attr("sessionId").exists(),
+                ConditionExpression=Attr("id").exists(),
             )
 
             return _generate_auth_response(True, event.method_arn, {"sessionId": sess_id})
@@ -49,10 +42,18 @@ def auth(event: AuthorizerEvent):
         return _generate_auth_response(False, event.method_arn)
 
 
-def connect(event, ctx):
+@api_handler
+def connect(event: WebSocketRouteEvent):
     """
     Implementation of the WebSocket API $connect route
     """
+    LOCATIONS_QUEUE.send_message(
+        MessageBody=LocationSenderMessage(
+            session_id=event.session_id,
+            conn_id=event.request_context.connection_id,
+        ).model_dump_json()
+    )
+
     return {"statusCode": 200}
 
 
@@ -69,10 +70,8 @@ def disconnect(event: WebSocketRouteEvent):
     Implementation of the WebSocket API $disconnect route
     """
     try:
-        sess_id = event.request_context.authorizer["sessionId"]
-
-        RESOURCES.sessions.update_item(
-            Key={"sessionId": sess_id},
+        SESSIONS.update_item(
+            Key={"id": event.session_id},
             UpdateExpression="DELETE subscribers :s",
             ExpressionAttributeValues={":s": {event.request_context.connection_id}},
         )

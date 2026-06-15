@@ -2,15 +2,16 @@
 
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import boto3
 from boto3.dynamodb.conditions import Key
 
-SESSION_MAP = json.loads((Path(__file__).parent / "traces.json").read_text())
+SESSION_MAP = json.loads((Path(__file__).parent / "session-names.json").read_text())
 
 OUTPUTS = json.loads((Path(__file__).parent / "cdk.out/outputs.json").read_text())
-TABLE = boto3.resource("dynamodb").Table(OUTPUTS["PeuzonStack"]["TracesTableName"])
+TABLE = boto3.resource("dynamodb").Table(OUTPUTS["PeuzonStack"]["LocationsTableName"])
 
 
 def query_all(sess_name: str):
@@ -21,7 +22,7 @@ def query_all(sess_name: str):
         resp = TABLE.query(**params)
         more = params["ExclusiveStartKey"] = resp.get("LastEvaluatedKey")
         for item in resp.get("Items") or []:
-            print(f'{item["timestamp"]} {_get_loc(item)}')
+            print(_format_item(item))
 
 
 def query_some(sess_name: str, limit: int):
@@ -31,13 +32,21 @@ def query_some(sess_name: str, limit: int):
         Limit=limit,
     )
     for item in resp.get("Items") or []:
-        print(f'{item["timestamp"]} {_get_loc(item)}')
+        print(_format_item(item))
 
 
-def _get_loc(item: dict) -> str:
+def _format_item(item: dict) -> str:
+    if recv := item.get("receivedAt"):
+        recv = datetime.fromisoformat(recv)
+        cap = datetime.fromisoformat(item["timestamp"])
+        delta = str(recv - cap)
+    else:
+        delta = ""
+
     lat = item.get("lat") or item["latitude"]
     lng = item.get("lng") or item["longitude"]
-    return f"{lat} {lng}"
+
+    return f'{item["timestamp"]} {lat} {lng} {delta}'
 
 
 if __name__ == "__main__":

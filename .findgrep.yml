@@ -7,6 +7,9 @@ exclude-paths:
     alias: D
     default: true
     pattern: dist
+  logs:
+    default: true
+    pattern: logs
   cover:
     disabled: true
   cxx:

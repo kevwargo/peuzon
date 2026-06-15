@@ -85,7 +85,7 @@ class Tracker : Service() {
             Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID),
             utf8Enc
         )
-        endpoint = "$apiUrl/sessions/$deviceId/points"
+        endpoint = "$apiUrl/sessions/$deviceId/locations"
 
         fusedClient = LocationServices.getFusedLocationProviderClient(this)
         createNotificationChannel()
