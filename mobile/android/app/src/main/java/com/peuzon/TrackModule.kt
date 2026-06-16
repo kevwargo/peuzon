@@ -1,9 +1,13 @@
 package com.peuzon
 
 import android.Manifest
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.net.Uri
 import android.os.Build
+import android.os.IBinder
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
@@ -19,7 +23,36 @@ class TrackModule(private val rctx: ReactApplicationContext) : ReactContextBaseJ
         private const val TAG = "RNTrackModule"
     }
 
+    private var trackerService: Tracker? = null
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+            val trackerBinder = binder as? Tracker.LocalBinder ?: return
+
+            trackerService = trackerBinder.getService().apply {
+                Log.i(TAG, "connected to $this")
+                attachReactContext(rctx)
+            }
+        }
+
+        override fun onServiceDisconnected(name: ComponentName) {
+            Log.i(TAG, "disconnected from $trackerService")
+            trackerService = null
+        }
+    }
+
     override fun getName() = "LocTrack"
+
+    override fun initialize() {
+        val intent = Intent(rctx, Tracker::class.java)
+        val bound = rctx.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        Log.i(TAG, "bound in initialize() = $bound")
+    }
+
+    override fun invalidate() {
+        Log.i(TAG, "invalidate(), unbinding $trackerService")
+        rctx.unbindService(serviceConnection)
+    }
 
     @ReactMethod
     fun startTracking(promise: Promise) {
@@ -52,7 +85,9 @@ class TrackModule(private val rctx: ReactApplicationContext) : ReactContextBaseJ
     fun stopTracking(promise: Promise) {
         try {
             val intent = Intent(rctx, Tracker::class.java)
-            rctx.stopService(intent)
+            val stopped = rctx.stopService(intent)
+            rctx.unbindService(serviceConnection)
+            Log.i(TAG, "tracker service stopped($stopped) and unbound")
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("TRACK_STOP_FAILED", e)

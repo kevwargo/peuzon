@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.location.Location
+import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -16,6 +17,9 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.core.content.PermissionChecker
+import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.Granularity
 import com.google.android.gms.location.LocationCallback
@@ -50,6 +54,9 @@ class Tracker : Service() {
         private const val LOCATION_INTERVAL_MS = 10_000L
         private const val FLUSH_INTERVAL_MS = 10_000L
         private const val MAX_BATCH_SIZE = 100
+        private const val MAX_BUF_SIZE = 1000
+
+        private const val EVENT_LATEST_LOCATION = "LatestLocation"
     }
 
     private lateinit var fusedClient: FusedLocationProviderClient
@@ -58,7 +65,13 @@ class Tracker : Service() {
     private val utf8Enc = StandardCharsets.UTF_8.name()
     private val httpClient = OkHttpClient()
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val pendingLocations = Collections.synchronizedList(mutableListOf<Location>())
+    @Volatile
+    private var latestLocation: Location? = null
+
+    @Volatile
+    private var reactContext: ReactApplicationContext? = null
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -67,13 +80,29 @@ class Tracker : Service() {
                 pendingLocations.add(loc)
                 Log.i(TAG, "loc lat=${loc.latitude} lon=${loc.longitude}")
             }
+
+            if (pendingLocations.size > MAX_BUF_SIZE) {
+                val oldSize = pendingLocations.size
+                pendingLocations.subList(0, pendingLocations.size - MAX_BUF_SIZE).clear()
+                Log.i(TAG, "trimmed pending locations buffer from ${oldSize} to ${pendingLocations.size}")
+            }
+            
             if (pendingLocations.size >= MAX_BATCH_SIZE) {
                 serviceScope.launch {
                     flushLocations()
                 }
             }
+
+            latestLocation = result.locations[result.locations.size - 1]
+            emitLatestLocation()
         }
     }
+
+    inner class LocalBinder : Binder() {
+        fun getService(): Tracker = this@Tracker
+    }
+
+    private val binder = LocalBinder()
 
     override fun onCreate() {
         super.onCreate()
@@ -131,7 +160,30 @@ class Tracker : Service() {
         super.onDestroy()
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onBind(intent: Intent): IBinder {
+        Log.i(TAG, "${this}.onBind($intent)")
+        return binder
+    }
+
+    fun attachReactContext(rctx: ReactApplicationContext) {
+        reactContext = rctx
+        Log.i(TAG, "attached react context $rctx")
+        emitLatestLocation()
+    }
+
+    private fun emitLatestLocation() {
+        val rctx = reactContext ?: return
+        if (!rctx.hasActiveReactInstance()) {
+            Log.i(TAG, "the latest rctx doesn't have active react instance");
+            return
+        }
+
+        latestLocation?.let {
+            Log.i(TAG, "emitting latest location $it")
+            rctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                .emit(EVENT_LATEST_LOCATION, Arguments.makeNativeMap(locToMap(it)))
+        } ?: Log.i(TAG, "latest location not set")
+    }
 
     private fun startLocationUpdates() {
         val request =
@@ -153,6 +205,24 @@ class Tracker : Service() {
         }
     }
 
+    private fun locToMap(loc: Location) = mapOf(
+        "pid" to Process.myPid(),
+        "tid" to Process.myTid(),
+        "ts" to loc.time,
+        "lat" to loc.latitude,
+        "lng" to loc.longitude,
+        "acc" to loc.accuracy,
+        "alt" to loc.altitude,
+        "speed" to loc.speed,
+        "bearing" to loc.bearing,
+    )
+
+    private fun locToJSON(loc: Location) = JSONObject().apply {
+        for ((k, v) in locToMap(loc)) {
+            put(k, v)
+        }
+    }
+
     private fun flushLocations() {
         val batch: List<Location>
         synchronized(pendingLocations) {
@@ -166,23 +236,11 @@ class Tracker : Service() {
         }
 
         try {
-            val payload = JSONArray()
-
-            for (loc in batch) {
-                val obj = JSONObject()
-                    .put("pid", Process.myPid())
-                    .put("tid", Process.myTid())
-                    .put("ts", loc.time)
-                    .put("lat", loc.latitude)
-                    .put("lng", loc.longitude)
-                    .put("acc", loc.accuracy)
-                    .put("alt", loc.altitude)
-                    .put("speed", loc.speed)
-                    .put("bearing", loc.bearing)
-                payload.put(obj)
-            }
-
-            val body = payload.toString().toRequestBody("application/json".toMediaType())
+            val body = JSONArray().apply {
+                for (loc in batch) {
+                    put(locToJSON(loc))
+                }
+            }.toString().toRequestBody("application/json".toMediaType())
             val request = Request.Builder()
                 .url(endpoint)
                 .header("Authorization", getString(R.string.api_key))
