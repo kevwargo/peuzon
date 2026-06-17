@@ -84,9 +84,10 @@ class TrackModule(private val rctx: ReactApplicationContext) : ReactContextBaseJ
     @ReactMethod
     fun stopTracking(promise: Promise) {
         try {
+            Log.i(TAG, "unbinding $trackerService in @React stopTracking()")
+            rctx.unbindService(serviceConnection)
             val intent = Intent(rctx, Tracker::class.java)
             val stopped = rctx.stopService(intent)
-            rctx.unbindService(serviceConnection)
             Log.i(TAG, "tracker service stopped($stopped) and unbound")
             promise.resolve(null)
         } catch (e: Exception) {
