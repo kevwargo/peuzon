@@ -1,8 +1,6 @@
 import json
 import os
 
-from boto3.dynamodb.conditions import Attr
-from botocore.exceptions import ClientError
 from peuzon.api_handler import api_handler
 from peuzon.botores import boto3_resource
 from peuzon.models.location_sender import Message as LocationSenderMessage
@@ -19,26 +17,12 @@ def auth(event: AuthorizerEvent):
     """
     try:
         sess_id = event.query_string_parameters["s"]
+        if not SESSIONS.get_item(Key={"id": sess_id}).get("Item"):
+            raise ValueError(f"session {sess_id} is invalid")
 
-        try:
-            SESSIONS.update_item(
-                Key={"id": sess_id},
-                UpdateExpression="ADD subscribers :s",
-                ExpressionAttributeValues={":s": {event.request_context.connection_id}},
-                ConditionExpression=Attr("id").exists(),
-            )
-
-            return _generate_auth_response(True, event.method_arn, {"sessionId": sess_id})
-        except ClientError as e:
-            if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
-                raise
-
-            print(f"session {sess_id} is invalid")
-
-            return _generate_auth_response(False, event.method_arn)
+        return _generate_auth_response(True, event.method_arn, {"sessionId": sess_id})
     except Exception as e:
         print(f"{type(e).__name__}({e})")
-
         return _generate_auth_response(False, event.method_arn)
 
 

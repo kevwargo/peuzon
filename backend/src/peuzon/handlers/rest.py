@@ -47,17 +47,27 @@ def add_location(event: HttpRouteEvent):
         session = SESSIONS.get_item(Key={"id": event.session_id}).get("Item")
         print(json.dumps({"session": session, "payload": event.payload_json}, default=str))
 
+        now = _datefmt(datetime.now(UTC))
+        locations = [
+            loc
+            | {
+                "timestamp": _datefmt(datetime.fromtimestamp(loc["ts"] / 1000, UTC)),
+                "receivedAt": now,
+            }
+            for loc in event.payload_json
+        ]
+
         for subscriber in (session or {}).get("subscribers", []):
             try:
                 WS_CALLBACK.post_to_connection(
                     ConnectionId=subscriber,
-                    Data=json.dumps(event.payload_json).encode(),
+                    Data=json.dumps(locations).encode(),
                 )
             except ClientError as ce:
                 print(f"{type(ce).__name__}({ce})")
 
         if isinstance(event.payload_json, list):
-            _store_locations(event.session_id, event.payload_json)
+            _store_locations(event.session_id, locations)
 
         return {"statusCode": 201, "body": ""}
     except Exception as e:
@@ -72,20 +82,14 @@ def heartbeat(event: HttpRouteEvent):
 
 
 def _store_locations(sess_id: str, locations: list[dict]):
-    now = _datefmt(datetime.now(UTC))
     with LOCATIONS.batch_writer() as batch:
         for loc in locations:
-            dt = datetime.fromtimestamp(loc["ts"] / 1000, UTC)
-            item = _to_decimal(loc) | {
-                "sessionId": sess_id,
-                "timestamp": _datefmt(dt),
-                "receivedAt": now,
-            }
+            item = _to_decimal(loc) | {"sessionId": sess_id, "buffered": True}
             batch.put_item(Item=item)
 
 
-def _to_decimal(item: dict) -> dict:
-    return {k: Decimal(str(v)) if isinstance(v, float) else v for k, v in item.items()}
+def _to_decimal(loc: dict) -> dict:
+    return {k: Decimal(str(v)) if isinstance(v, float) else v for k, v in loc.items()}
 
 
 def _datefmt(dt: datetime) -> str:

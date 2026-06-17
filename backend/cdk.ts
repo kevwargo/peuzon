@@ -120,7 +120,7 @@ export class PeuzonStack extends cdk.Stack {
             environment: {
               SESSIONS_TABLE: sessionsTable.tableName,
             },
-            apply: f => sessionsTable.grantReadWriteData(f),
+            apply: f => sessionsTable.grantReadData(f),
           }),
           {
             identitySource: ["route.request.querystring.s"],
@@ -171,6 +171,7 @@ export class PeuzonStack extends cdk.Stack {
         f.addEventSource(new lambdaEvents.SqsEventSource(locationSenderQueue));
         wsApi.grantManageConnections(f);
         locationsTable.grantReadData(f);
+        sessionsTable.grantReadWriteData(f);
       },
     });
 

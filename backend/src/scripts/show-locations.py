@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import json
 import sys
 from datetime import datetime
@@ -8,9 +6,9 @@ from pathlib import Path
 import boto3
 from boto3.dynamodb.conditions import Key
 
-SESSION_MAP = json.loads((Path(__file__).parent / "session-names.json").read_text())
+SESSION_MAP = json.loads((Path(__file__).parent / "../../session-names.json").read_text())
 
-OUTPUTS = json.loads((Path(__file__).parent / "cdk.out/outputs.json").read_text())
+OUTPUTS = json.loads((Path(__file__).parent / "../../cdk.out/outputs.json").read_text())
 TABLE = boto3.resource("dynamodb").Table(OUTPUTS["PeuzonStack"]["LocationsTableName"])
 
 
