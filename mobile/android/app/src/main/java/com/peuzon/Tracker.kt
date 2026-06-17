@@ -60,7 +60,7 @@ class Tracker : Service() {
     }
 
     private lateinit var fusedClient: FusedLocationProviderClient
-    private lateinit var wakeLock: PowerManager.WakeLock
+    private var wakeLock: PowerManager.WakeLock? = null
     private lateinit var endpoint: String
     private val utf8Enc = StandardCharsets.UTF_8.name()
     private val httpClient = OkHttpClient()
@@ -119,13 +119,16 @@ class Tracker : Service() {
         fusedClient = LocationServices.getFusedLocationProviderClient(this)
         createNotificationChannel()
 
-        val pm = getSystemService(PowerManager::class.java)
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "${packageName}:tracker")
-        wakeLock.acquire()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.i(TAG, "onStartCommand(${this})")
+
+        if (wakeLock == null) {
+            val pm = getSystemService(PowerManager::class.java)
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "${packageName}:tracker")
+            wakeLock?.acquire()
+        }
 
         val hasPermission = PermissionChecker.checkSelfPermission(
             this,
@@ -154,6 +157,7 @@ class Tracker : Service() {
     override fun onDestroy() {
         Log.i(TAG, "onDestroy(${this})")
 
+        wakeLock?.release()
         fusedClient.removeLocationUpdates(locationCallback)
         serviceScope.cancel()
 
