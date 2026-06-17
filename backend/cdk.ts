@@ -1,4 +1,5 @@
 import * as cdk from "aws-cdk-lib";
+import * as subprocess from "child_process";
 import { Construct } from "constructs";
 
 import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
@@ -53,13 +54,14 @@ export class PeuzonStack extends cdk.Stack {
       }),
     );
 
+    const uvExportCmd = "uv export --locked --no-dev --format requirements.txt";
     const assetReqs = "/asset-output/requirements.txt";
     const depsLayer = new lambda.LayerVersion(this, "depsLayer", {
       compatibleRuntimes: [lambda.Runtime.PYTHON_3_13],
       code: lambda.Code.fromAsset(`${__dirname}/src`, {
-        assetHash: cdk.FileSystem.fingerprint(`${__dirname}/src`, {
-          ignoreMode: cdk.IgnoreMode.GIT,
-          exclude: ["*", "!pyproject.toml", "!uv.lock"],
+        assetHash: subprocess.execSync(`${uvExportCmd} | md5sum`, {
+          cwd: `${__dirname}/src`,
+          encoding: "utf-8",
         }),
         bundling: {
           image: cdk.DockerImage.fromRegistry("ghcr.io/astral-sh/uv:python3.13-bookworm"),
@@ -67,7 +69,7 @@ export class PeuzonStack extends cdk.Stack {
             "bash",
             "-c",
             [
-              `uv export --locked --no-dev --format requirements.txt > ${assetReqs}`,
+              `${uvExportCmd} > ${assetReqs}`,
               `uv pip install --requirements ${assetReqs} --target /asset-output/python`,
             ].join(" && "),
           ],
