@@ -1,10 +1,12 @@
 import { Duration } from "aws-cdk-lib";
-import { CorsHttpMethod, HttpApi, WebSocketApi } from "aws-cdk-lib/aws-apigatewayv2";
+import { CorsHttpMethod, HttpApi, HttpMethod, WebSocketApi } from "aws-cdk-lib/aws-apigatewayv2";
 import {
   HttpLambdaAuthorizer,
   HttpLambdaResponseType,
 } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
+import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import { Table } from "aws-cdk-lib/aws-dynamodb";
+import { Function } from "aws-cdk-lib/aws-lambda";
 import { Construct } from "constructs";
 import { createFunction } from "../utils/lambda";
 
@@ -50,6 +52,59 @@ export class RestApi extends Construct {
       },
     });
 
-    // TODO: addRoutes
+    this.addRoute(
+      "/devices/{id}",
+      createFunction(this, "rest.put_device", {
+        environment: {
+          DEVICES_TABLE: props.devices.tableName,
+        },
+        with: f => props.devices.grantReadWriteData(f),
+      }),
+      HttpMethod.PUT,
+    );
+    this.addRoute(
+      "/devices/{deviceId}/sessions/start",
+      createFunction(this, "rest.start_session", {
+        environment: {
+          SESSIONS_TABLE: props.sessions.tableName,
+        },
+        with: f => props.sessions.grantReadWriteData(f),
+      }),
+      HttpMethod.POST,
+    );
+    this.addRoute(
+      "/devices/{deviceId}/sessions/stop",
+      createFunction(this, "rest.stop_session", {
+        environment: {
+          SESSIONS_TABLE: props.sessions.tableName,
+        },
+        with: f => props.sessions.grantReadWriteData(f),
+      }),
+      HttpMethod.POST,
+    );
+    this.addRoute(
+      "/devices/{deviceId}/sessions/{sessionId}/locations",
+      createFunction(this, "rest.add_location", {
+        environment: {
+          DEVICES_TABLE: props.devices.tableName,
+          LOCATIONS_TABLE: props.locations.tableName,
+          SESSIONS_TABLE: props.sessions.tableName,
+        },
+        with: f => {
+          props.devices.grantReadData(f);
+          props.sessions.grantReadData(f);
+          props.locations.grantReadWriteData(f);
+        },
+      }),
+      HttpMethod.POST,
+    );
+  }
+
+  private addRoute(path: string, handler: Function, ...methods: HttpMethod[]) {
+    this.api.addRoutes({
+      path,
+      integration: new HttpLambdaIntegration(path, handler),
+      methods,
+    });
   }
 }
