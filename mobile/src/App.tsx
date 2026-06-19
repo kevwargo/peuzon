@@ -1,10 +1,3 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
 import { useState } from "react";
 import { Button, StyleSheet } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -41,6 +34,7 @@ function App() {
           <Button
             disabled={loading}
             title="Start FGS"
+            color="#4d63e2"
             onPress={createCallback(Tracker.start, true)}
           />
         )}
