@@ -12,5 +12,6 @@ line-length = 100
 
 [dependency-groups]
 dev = [
+    "ipython>=9.14.1",
     "websockets>=16.0",
 ]
