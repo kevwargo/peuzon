@@ -30,9 +30,9 @@ export interface FuncOpts extends FunctionOptions {
 
 function ensureLayer(scope: Construct): LayerVersion {
   const stack = Stack.of(scope);
-  const node = stack.node.tryFindChild(layerNodeId) as LayerVersion | undefined;
+  const node = stack.node.tryFindChild(layerNodeId);
   if (node) {
-    return node;
+    return node as LayerVersion;
   }
 
   return new LayerVersion(stack, layerNodeId, {
