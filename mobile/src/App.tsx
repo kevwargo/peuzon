@@ -8,8 +8,8 @@
 import { useState } from "react";
 import { Button, StyleSheet } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import Tracker from "./tracker";
 import BatteryExemptDialog from "./Battery";
+import Tracker from "./tracker";
 
 function App() {
   const [started, setStarted] = useState(false);

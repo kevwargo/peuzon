@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import Tracker from "./tracker";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import Tracker from "./tracker";
 
 function BatteryExemptDialog() {
   const [visible, setVisible] = useState(false);
