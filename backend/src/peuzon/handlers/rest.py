@@ -6,48 +6,124 @@ from decimal import Decimal
 from uuid import uuid4
 
 import boto3
+from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
-from peuzon.api_handler import api_handler
 from peuzon.api_keys import encode_api_key
 from peuzon.botores import boto3_resource
-from peuzon.models.rest import AuthorizerEvent, HttpRouteEvent
+from peuzon.lambda_handler import lambda_handler
+from peuzon.models.rest import (AuthorizerEvent, DeviceEvent,
+                                DeviceSubresourceEvent, HttpRouteEvent,
+                                SessionEvent)
 
 API_KEYS = boto3_resource("dynamodb").Table(os.getenv("API_KEYS_TABLE"))
-SESSIONS = boto3_resource("dynamodb").Table(os.getenv("SESSIONS_TABLE"))
+DEVICES = boto3_resource("dynamodb").Table(os.getenv("DEVICES_TABLE"))
 LOCATIONS = boto3_resource("dynamodb").Table(os.getenv("LOCATIONS_TABLE"))
+SESSIONS = boto3_resource("dynamodb").Table(os.getenv("SESSIONS_TABLE"))
 WS_CALLBACK = boto3.client("apigatewaymanagementapi", endpoint_url=os.getenv("WS_CALLBACK_URL"))
 
 
-@api_handler
+def _handle_auth_exc(e: Exception):
+    return {"isAuthorized": False}
+
+
+def _handle_route_exc(e: Exception):
+    code, msg = 500, f"{type(e).__name__}({e})"
+    if isinstance(e, ApiException):
+        code, msg = e.code, str(e)
+
+    return {"statusCode": code, "body": msg}
+
+
+@lambda_handler(exc_handler=_handle_auth_exc)
 def auth(event: AuthorizerEvent):
+    hashed = encode_api_key(event.identity_source[0])
+    allow = bool(API_KEYS.get_item(Key={"hash": hashed}).get("Item"))
+    print("allow", allow)
+    return {"isAuthorized": allow}
+
+
+@lambda_handler(exc_handler=_handle_route_exc)
+def get_device(event: DeviceEvent):
+    device = DEVICES.get_item(Key={"id": event.device_id}).get("Item")
+    if not device:
+        raise ApiException(404, f"device {event.device_id} is not found")
+
+    return device
+
+
+@lambda_handler(exc_handler=_handle_route_exc)
+def put_device(event: DeviceEvent):
+    DEVICES.put_item(Item={**event.payload_json, "id": event.device_id})
+    return ""
+
+
+@lambda_handler(exc_handler=_handle_route_exc)
+def get_active_session(event: DeviceSubresourceEvent):
+    if s := _get_active_session(event.device_id):
+        return s
+
+    raise ApiException(404, "No active session")
+
+
+@lambda_handler(exc_handler=_handle_route_exc)
+def start_session(event: DeviceSubresourceEvent):
+    active_session = _get_active_session(event.device_id)
+    if active_session:
+        raise ApiException(409, "There is an active session", session=active_session)
+
+    new_session = {"deviceId": event.device_id, "id": str(uuid4()), "startTime": _datetime_now()}
+    SESSIONS.put_item(Item=new_session)
+
+    return new_session
+
+
+@lambda_handler(exc_handler=_handle_route_exc)
+def stop_session(event: SessionEvent):
     try:
-        hashed = encode_api_key(event.identity_source[0])
-        allow = bool(API_KEYS.get_item(Key={"hash": hashed}).get("Item"))
-        print("allow", allow)
-        return {"isAuthorized": allow}
-    except Exception as e:
-        print(f"{type(e).__name__}({e})")
-        return {"isAuthorized": False}
+        SESSIONS.update_item(
+            Key={"deviceId": event.device_id, "id": event.session_id},
+            UpdateExpression="SET endTime = :e",
+            ExpressionAttributeValues={":e": _datetime_now()},
+            ConditionExpression=Attr("deviceId").exists() & Attr("endTime").not_exists(),
+        )
+    except ClientError as ce:
+        if ce.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            raise ApiException(
+                400, f"Session {event.session_id} is already stopped or doesn't exist"
+            ) from None
+        raise
 
 
-@api_handler
-def create_session(event: HttpRouteEvent):
-    sess_id = str(uuid4())
-    try:
-        SESSIONS.put_item(Item={"id": sess_id})
-    except Exception as e:
-        return {"statusCode": 500, "body": f"{type(e).__name__}({e})"}
+def _get_active_session(device_id: str) -> dict | None:
+    prev_sessions = SESSIONS.query(
+        KeyConditionExpression=Key("deviceId").eq(device_id),
+        IndexName="startTime",
+        ScanIndexForward=False,
+        Limit=1,
+    ).get("Items")
 
-    return sess_id
+    if prev_sessions:
+        last_session = prev_sessions[0]
+        if "endTime" not in last_session:
+            return last_session
 
 
-@api_handler
+class ApiException(Exception):
+    def __init__(self, code: int, msg: str, **extra):
+        super().__init__(json.dumps({"error": msg, **extra}))
+        self.code = code
+
+
+# *** OLD CODE ***
+
+
+@lambda_handler
 def add_location(event: HttpRouteEvent):
     try:
         session = SESSIONS.get_item(Key={"id": event.session_id}).get("Item")
         print(json.dumps({"session": session, "payload": event.payload_json}, default=str))
 
-        now = _datefmt(datetime.now(UTC))
+        now = _datetime_now()
         locations = [
             loc
             | {
@@ -76,11 +152,6 @@ def add_location(event: HttpRouteEvent):
         return {"statusCode": 500, "body": err}
 
 
-@api_handler
-def heartbeat(event: HttpRouteEvent):
-    return {"statusCode": 202}
-
-
 def _store_locations(sess_id: str, locations: list[dict]):
     with LOCATIONS.batch_writer() as batch:
         for loc in locations:
@@ -94,6 +165,10 @@ def _to_decimal(loc: dict) -> dict:
 
 def _datefmt(dt: datetime) -> str:
     return _TS_RE.sub("Z", dt.isoformat(timespec="milliseconds"))
+
+
+def _datetime_now():
+    return _datefmt(datetime.now(UTC))
 
 
 _TS_RE = re.compile(r"\+00:00$")

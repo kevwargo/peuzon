@@ -54,13 +54,33 @@ export class RestApi extends Construct {
 
     this.addRoute(
       "/devices/{id}",
+      createFunction(this, "rest.get_device", {
+        environment: {
+          DEVICES_TABLE: props.devices.tableName,
+        },
+        with: f => props.devices.grantReadData(f),
+      }),
+      HttpMethod.GET,
+    );
+    this.addRoute(
+      "/devices/{id}",
       createFunction(this, "rest.put_device", {
         environment: {
           DEVICES_TABLE: props.devices.tableName,
         },
-        with: f => props.devices.grantReadWriteData(f),
+        with: f => props.devices.grantWriteData(f),
       }),
       HttpMethod.PUT,
+    );
+    this.addRoute(
+      "/devices/{deviceId}/sessions/active",
+      createFunction(this, "rest.get_active_session", {
+        environment: {
+          SESSIONS_TABLE: props.sessions.tableName,
+        },
+        with: f => props.sessions.grantReadData(f),
+      }),
+      HttpMethod.GET,
     );
     this.addRoute(
       "/devices/{deviceId}/sessions/start",
@@ -73,12 +93,12 @@ export class RestApi extends Construct {
       HttpMethod.POST,
     );
     this.addRoute(
-      "/devices/{deviceId}/sessions/stop",
+      "/devices/{deviceId}/sessions/{sessionId}/stop",
       createFunction(this, "rest.stop_session", {
         environment: {
           SESSIONS_TABLE: props.sessions.tableName,
         },
-        with: f => props.sessions.grantReadWriteData(f),
+        with: f => props.sessions.grant(f, "dynamodb:UpdateItem"),
       }),
       HttpMethod.POST,
     );

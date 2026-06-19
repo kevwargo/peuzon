@@ -24,6 +24,20 @@ class HttpRouteEvent(AwsModel):
 
         return json.loads(body)
 
+
+class DeviceEvent(HttpRouteEvent):
+    @cached_property
+    def device_id(self) -> str:
+        return self.path_parameters["id"]
+
+
+class DeviceSubresourceEvent(HttpRouteEvent):
+    @cached_property
+    def device_id(self) -> str:
+        return self.path_parameters["deviceId"]
+
+
+class SessionEvent(DeviceSubresourceEvent):
     @cached_property
     def session_id(self) -> str:
-        return self.path_parameters["sessId"]
+        return self.path_parameters["sessionId"]

@@ -1,8 +1,8 @@
 import json
 import os
 
-from peuzon.api_handler import api_handler
 from peuzon.botores import boto3_resource
+from peuzon.lambda_handler import lambda_handler
 from peuzon.models.location_sender import Message as LocationSenderMessage
 from peuzon.models.ws import AuthorizerEvent, WebSocketRouteEvent
 
@@ -10,7 +10,7 @@ SESSIONS = boto3_resource("dynamodb").Table(os.getenv("SESSIONS_TABLE"))
 LOCATIONS_QUEUE = boto3_resource("sqs").Queue(os.getenv("LOCATIONS_QUEUE"))
 
 
-@api_handler
+@lambda_handler
 def auth(event: AuthorizerEvent):
     """
     Implementation of the Lambda authorizer attached to the WebSocket API
@@ -26,7 +26,7 @@ def auth(event: AuthorizerEvent):
         return _generate_auth_response(False, event.method_arn)
 
 
-@api_handler
+@lambda_handler
 def connect(event: WebSocketRouteEvent):
     """
     Implementation of the WebSocket API $connect route
@@ -48,7 +48,7 @@ def default(event, ctx):
     return {"statusCode": 200}
 
 
-@api_handler
+@lambda_handler
 def disconnect(event: WebSocketRouteEvent):
     """
     Implementation of the WebSocket API $disconnect route

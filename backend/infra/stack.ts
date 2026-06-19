@@ -41,7 +41,6 @@ export class PeuzonStack extends Stack {
     Object.entries({
       RestApiUrl: rest.api.apiEndpoint,
       WebSocketUrl: ws.stage.url,
-      SessionsTableName: sessions.tableName,
       LocationsTableName: locations.tableName,
       ApiKeysTableName: apiKeys.tableName,
       BucketName: bucket.bucketName,

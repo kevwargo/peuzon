@@ -4,8 +4,8 @@ from decimal import Decimal
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
-from peuzon.api_handler import api_handler
 from peuzon.botores import boto3_resource
+from peuzon.lambda_handler import lambda_handler
 from peuzon.models.location_sender import Message
 from peuzon.models.sqs import SqsEvent
 
@@ -16,7 +16,7 @@ LOCATIONS = boto3_resource("dynamodb").Table(os.getenv("LOCATIONS_TABLE"))
 WS_CALLBACK = boto3.client("apigatewaymanagementapi", endpoint_url=os.getenv("WS_CALLBACK_URL"))
 
 
-@api_handler
+@lambda_handler
 def handler(event: SqsEvent):
     try:
         for msg in event.records:
