@@ -8,7 +8,7 @@ from uuid import uuid4
 import boto3
 from botocore.exceptions import ClientError
 from peuzon.api_handler import api_handler
-from peuzon.api_keys import encode
+from peuzon.api_keys import encode_api_key
 from peuzon.botores import boto3_resource
 from peuzon.models.rest import AuthorizerEvent, HttpRouteEvent
 
@@ -21,7 +21,7 @@ WS_CALLBACK = boto3.client("apigatewaymanagementapi", endpoint_url=os.getenv("WS
 @api_handler
 def auth(event: AuthorizerEvent):
     try:
-        hashed = encode(event.identity_source[0])
+        hashed = encode_api_key(event.identity_source[0])
         allow = bool(API_KEYS.get_item(Key={"hash": hashed}).get("Item"))
         print("allow", allow)
         return {"isAuthorized": allow}

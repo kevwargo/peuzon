@@ -4,7 +4,7 @@ import xml.etree.ElementTree as xml
 from pathlib import Path
 
 import boto3
-from peuzon.api_keys import generate
+from peuzon.api_keys import generate_api_key
 
 OUTPUTS = json.loads((Path(__file__).parent / "../../cdk.out/outputs.json").read_text())[
     "PeuzonStack"
@@ -63,8 +63,8 @@ def main(app_path: Path):
     else:
         print(f"API key is not defined in {android_strings}, generating new one ...")
         table_name = OUTPUTS["ApiKeysTableName"]
-        new_api_key = generate(boto3.resource("dynamodb").Table(table_name))
-        android_strings.set("api_key", new_api_key)
+        api_key = generate_api_key(boto3.resource("dynamodb").Table(table_name))
+        android_strings.set("api_key", api_key)
 
     env = {
         "API_URL": OUTPUTS["RestApiUrl"],
