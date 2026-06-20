@@ -104,7 +104,7 @@ export class RestApi extends Construct {
     );
     this.addRoute(
       "/devices/{deviceId}/sessions/{sessionId}/locations",
-      createFunction(this, "rest.add_location", {
+      createFunction(this, "rest.add_locations", {
         environment: {
           DEVICES_TABLE: props.devices.tableName,
           LOCATIONS_TABLE: props.locations.tableName,
@@ -114,6 +114,7 @@ export class RestApi extends Construct {
           props.devices.grantReadData(f);
           props.sessions.grantReadData(f);
           props.locations.grantReadWriteData(f);
+          props.wsApi.grantManageConnections(f);
         },
       }),
       HttpMethod.POST,

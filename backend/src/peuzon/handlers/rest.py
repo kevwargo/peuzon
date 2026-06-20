@@ -12,8 +12,7 @@ from peuzon.api_keys import encode_api_key
 from peuzon.botores import boto3_resource
 from peuzon.lambda_handler import lambda_handler
 from peuzon.models.rest import (AuthorizerEvent, DeviceEvent,
-                                DeviceSubresourceEvent, HttpRouteEvent,
-                                SessionEvent)
+                                DeviceSubresourceEvent, SessionEvent)
 
 API_KEYS = boto3_resource("dynamodb").Table(os.getenv("API_KEYS_TABLE"))
 DEVICES = boto3_resource("dynamodb").Table(os.getenv("DEVICES_TABLE"))
@@ -94,6 +93,54 @@ def stop_session(event: SessionEvent):
         raise
 
 
+@lambda_handler
+def add_locations(event: SessionEvent):
+    device = DEVICES.get_item(Key={"id": event.device_id}).get("Item")
+    if not device:
+        raise ApiException(404, f"Device {event.device_id} not found")
+
+    session = SESSIONS.get_item(Key={"id": event.session_id}).get("Item")
+    if not session:
+        raise ApiException(404, f"Session {event.session_id} not found")
+
+    print(
+        json.dumps(
+            {"device": device, "session": session, "payload": event.payload_json}, default=str
+        )
+    )
+
+    now = _datetime_now()
+    locations = [
+        loc
+        | {
+            "timestamp": _datefmt(datetime.fromtimestamp(loc["ts"] / 1000, UTC)),
+            "receivedAt": now,
+        }
+        for loc in event.payload_json
+    ]
+
+    subscribers = device.get("subscribers", set()).union(session.get("subscribers", set()))
+    for subscriber in subscribers:
+        try:
+            WS_CALLBACK.post_to_connection(
+                ConnectionId=subscriber,
+                Data=json.dumps(locations).encode(),
+            )
+        except ClientError as ce:
+            print(f"{type(ce).__name__}({ce}): {subscriber}")
+
+    if isinstance(event.payload_json, list):
+        _store_locations(event, locations)
+
+    return {"statusCode": 201, "body": ""}
+
+
+class ApiException(Exception):
+    def __init__(self, code: int, msg: str, **extra):
+        super().__init__(json.dumps({"error": msg, **extra}))
+        self.code = code
+
+
 def _get_active_session(device_id: str) -> dict | None:
     prev_sessions = SESSIONS.query(
         KeyConditionExpression=Key("deviceId").eq(device_id),
@@ -108,54 +155,10 @@ def _get_active_session(device_id: str) -> dict | None:
             return last_session
 
 
-class ApiException(Exception):
-    def __init__(self, code: int, msg: str, **extra):
-        super().__init__(json.dumps({"error": msg, **extra}))
-        self.code = code
-
-
-# *** OLD CODE ***
-
-
-@lambda_handler
-def add_location(event: HttpRouteEvent):
-    try:
-        session = SESSIONS.get_item(Key={"id": event.session_id}).get("Item")
-        print(json.dumps({"session": session, "payload": event.payload_json}, default=str))
-
-        now = _datetime_now()
-        locations = [
-            loc
-            | {
-                "timestamp": _datefmt(datetime.fromtimestamp(loc["ts"] / 1000, UTC)),
-                "receivedAt": now,
-            }
-            for loc in event.payload_json
-        ]
-
-        for subscriber in (session or {}).get("subscribers", []):
-            try:
-                WS_CALLBACK.post_to_connection(
-                    ConnectionId=subscriber,
-                    Data=json.dumps(locations).encode(),
-                )
-            except ClientError as ce:
-                print(f"{type(ce).__name__}({ce})")
-
-        if isinstance(event.payload_json, list):
-            _store_locations(event.session_id, locations)
-
-        return {"statusCode": 201, "body": ""}
-    except Exception as e:
-        err = f"{type(e).__name__}({e})"
-        print(err)
-        return {"statusCode": 500, "body": err}
-
-
-def _store_locations(sess_id: str, locations: list[dict]):
+def _store_locations(event: SessionEvent, locations: list[dict]):
     with LOCATIONS.batch_writer() as batch:
         for loc in locations:
-            item = _to_decimal(loc) | {"sessionId": sess_id, "buffered": True}
+            item = _to_decimal(loc) | {"deviceId": event.device_id, "sessionId": event.session_id}
             batch.put_item(Item=item)
 
 
