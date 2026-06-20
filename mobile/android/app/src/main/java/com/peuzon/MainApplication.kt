@@ -11,11 +11,11 @@ class MainApplication : Application(), ReactApplication {
 
   override val reactHost: ReactHost by lazy {
     getDefaultReactHost(
-      context = applicationContext,
-      packageList =
-        PackageList(this).packages.apply {
-          add(TrackPackage())
-        },
+        context = applicationContext,
+        packageList =
+            PackageList(this).packages.apply {
+              add(TrackPackage())
+            },
     )
   }
 
