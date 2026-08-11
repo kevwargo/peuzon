@@ -35,6 +35,14 @@ class AuthorizerEvent(AwsModel):
     stage_variables: dict[str, str] = {}
     request_context: RequestContext
 
+    @cached_property
+    def device_id(self) -> str:
+        return self.query_string_parameters["d"]
+
+    @cached_property
+    def session_id(self) -> str | None:
+        return self.query_string_parameters.get("s")
+
 
 class WebSocketRouteEvent(AwsModel):
     headers: dict[str, str] = {}
@@ -44,11 +52,9 @@ class WebSocketRouteEvent(AwsModel):
     body: str | None = None
 
     @cached_property
-    def session_id(self) -> str:
+    def device_id(self) -> str:
+        return self.request_context.authorizer["deviceId"]
+
+    @cached_property
+    def session_id(self) -> str | None:
         return self.request_context.authorizer["sessionId"]
-
-
-class ConnectEvent(WebSocketRouteEvent):
-    query_string_parameters: dict[str, str] = {}
-    multi_value_query_string_parameters: dict[str, list[str]] = {}
-    stage_variables: dict[str, str] = {}

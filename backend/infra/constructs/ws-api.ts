@@ -32,18 +32,22 @@ export class WsApi extends Construct {
           createFunction(this, "ws.auth", {
             environment: {
               DEVICES_TABLE: props.devices.tableName,
+              SESSIONS_TABLE: props.sessions.tableName,
             },
-            with: f => props.devices.grantReadData(f),
+            with: f => {
+              props.devices.grantReadData(f);
+              props.sessions.grantReadData(f);
+            },
           }),
           {
-            identitySource: ["route.request.querystring.s"],
+            identitySource: ["route.request.querystring.d"],
           },
         ),
         integration: new WebSocketLambdaIntegration(
           "connect",
           createFunction(this, "ws.connect", {
             environment: {
-              LOCATION_SENDER_QUEUE: locationSenderQueue.queueUrl,
+              LOCATIONS_QUEUE: locationSenderQueue.queueUrl,
             },
             with: f => locationSenderQueue.grantSendMessages(f),
           }),
@@ -55,9 +59,13 @@ export class WsApi extends Construct {
           createFunction(this, "ws.disconnect", {
             // TODO: ensure proper ws connection management (here and in other places)
             environment: {
+              DEVICES_TABLE: props.devices.tableName,
               SESSIONS_TABLE: props.sessions.tableName,
             },
-            with: f => props.sessions.grantReadWriteData(f),
+            with: f => {
+              props.devices.grant(f, "dynamodb:UpdateItem");
+              props.sessions.grant(f, "dynamodb:UpdateItem");
+            },
           }),
         ),
       },
@@ -77,12 +85,16 @@ export class WsApi extends Construct {
 
     createFunction(this, "send_locations.handler", {
       environment: {
+        DEVICES_TABLE: props.devices.tableName,
+        SESSIONS_TABLE: props.sessions.tableName,
         LOCATIONS_TABLE: props.locations.tableName,
         WS_CALLBACK_URL: this.stage.callbackUrl,
       },
       events: [new SqsEventSource(locationSenderQueue)],
       with: f => {
-        props.locations.grantReadData(f);
+        props.locations.grant(f, "dynamodb:Query");
+        props.devices.grant(f, "dynamodb:UpdateItem");
+        props.sessions.grant(f, "dynamodb:UpdateItem");
         this.stage.grantManagementApiAccess(f);
       },
     });

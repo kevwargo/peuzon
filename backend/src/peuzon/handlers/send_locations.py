@@ -4,48 +4,66 @@ from decimal import Decimal
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
-from peuzon.botores import boto3_resource
+from peuzon.botores import boto3_resource, ignore_aws_errors
 from peuzon.lambda_handler import lambda_handler
 from peuzon.models.location_sender import Message
 from peuzon.models.sqs import SqsEvent
 
 WS_MAX_MSG_SIZE = 32 * 1024
 
+DEVICES = boto3_resource("dynamodb").Table(os.getenv("DEVICES_TABLE"))
 SESSIONS = boto3_resource("dynamodb").Table(os.getenv("SESSIONS_TABLE"))
 LOCATIONS = boto3_resource("dynamodb").Table(os.getenv("LOCATIONS_TABLE"))
 WS_CALLBACK = boto3.client("apigatewaymanagementapi", endpoint_url=os.getenv("WS_CALLBACK_URL"))
 
 
-@lambda_handler
+@lambda_handler(exc_handler=lambda e: None)
 def handler(event: SqsEvent):
-    try:
-        for msg in event.records:
+    for msg in event.records:
+        try:
             _handle_message(Message.model_validate_json(msg.body))
-    except Exception as e:
-        print(f"{type(e).__name__}({e})")
+        except Exception as e:
+            print(f"{type(e).__name__}({e})")
 
 
 def _handle_message(msg: Message):
-    try:
-        more, params = True, {
-            "KeyConditionExpression": Key("sessionId").eq(msg.session_id),
-            "ConsistentRead": True,
-        }
-        with _WSBatchSender(WS_CALLBACK, msg.conn_id) as batch:
-            while more:
-                resp = LOCATIONS.query(**params)
-                more = params["ExclusiveStartKey"] = resp.get("LastEvaluatedKey")
-                batch.send(resp.get("Items") or [])
-
-        print(f"Subscribing {msg.conn_id} to session {msg.session_id}")
-        SESSIONS.update_item(
-            Key={"id": msg.session_id},
-            UpdateExpression="ADD subscribers :s",
-            ExpressionAttributeValues={":s": {msg.conn_id}},
-            ConditionExpression=Attr("id").exists(),
+    if msg.session_id:
+        params = dict(
+            IndexName="session",
+            KeyConditionExpression=Key("deviceId").eq(msg.device_id)
+            & Key("sessionId").eq(msg.session_id),
+            ConsistentRead=True,
         )
-    except Exception as e:
-        print(f"{type(e).__name__}({e})")
+    else:
+        params = dict(
+            KeyConditionExpression=Key("deviceId").eq(msg.device_id),
+            ConsistentRead=True,
+        )
+
+    more = True
+    with _WSBatchSender(WS_CALLBACK, msg.conn_id) as batch:
+        while more:
+            resp = LOCATIONS.query(**params)
+            more = params["ExclusiveStartKey"] = resp.get("LastEvaluatedKey")
+            # TODO: sort by timestamp if querying index
+            batch.send(resp.get("Items") or [])
+
+    update_params = dict(
+        UpdateExpression="ADD subscribers :s",
+        ExpressionAttributeValues={":s": {msg.conn_id}},
+        ConditionExpression=Attr("id").exists(),
+    )
+
+    print(f"Subscribing {msg.conn_id} to device {msg.device_id}")
+    with ignore_aws_errors("ConditionalCheckFailedException"):
+        DEVICES.update_item(Key={"id": msg.device_id}, **update_params)
+
+    if msg.session_id:
+        print(f"Subscribing {msg.conn_id} to session {msg.session_id}")
+        with ignore_aws_errors("ConditionalCheckFailedException"):
+            SESSIONS.update_item(
+                Key={"deviceId": msg.device_id, "id": msg.session_id}, **update_params
+            )
 
 
 class _WSBatchSender:

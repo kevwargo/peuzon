@@ -1,6 +1,8 @@
+from contextlib import contextmanager
 from functools import wraps
 
 import boto3
+from botocore.exceptions import ClientError
 
 
 class boto3_resource:
@@ -20,3 +22,12 @@ class boto3_resource:
                 return None
 
         return func
+
+
+@contextmanager
+def ignore_aws_errors(*codes: list[str]):
+    try:
+        yield
+    except ClientError as e:
+        if e.response["Error"]["Code"] not in codes:
+            raise

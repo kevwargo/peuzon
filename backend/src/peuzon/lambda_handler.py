@@ -27,10 +27,11 @@ def lambda_handler(fn=None, /, *, exc_handler=None):
                 req = convert(event)
                 return handler_fn(req)
             except Exception as e:
-                if callable(exc_handler):
-                    print(format_exc(e))
-                    return exc_handler(e)
-                raise
+                if not callable(exc_handler):
+                    raise
+
+                print(format_exc(e))
+                return exc_handler(e)
 
         return wrapped_handler
 
