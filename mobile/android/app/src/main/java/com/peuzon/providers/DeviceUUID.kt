@@ -25,7 +25,7 @@ object DeviceUUIDProvider {
 /**
  * Extension property available on any Context.
  *
- * Usage: val id = context.deviceId
+ * Usage: val id = context.deviceUUID
  */
 val Context.deviceUUID: String
   get() = DeviceUUIDProvider.retrieve(this)
