@@ -24,8 +24,6 @@ exclude-paths:
     pattern: .gradle
   serverless:
     disabled: true
-  venv:
-    disabled: true
 ignore-files:
   js:
     disabled: true
