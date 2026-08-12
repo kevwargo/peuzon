@@ -5,11 +5,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.net.Uri
 import android.os.Build
 import android.os.IBinder
-import android.os.PowerManager
-import android.provider.Settings
 import android.util.Log
 import androidx.core.content.PermissionChecker
 import com.facebook.react.bridge.Promise
@@ -73,33 +70,6 @@ class TrackModule(private val rctx: ReactApplicationContext) : ReactContextBaseJ
       promise.resolve(null)
     } catch (e: Exception) {
       promise.reject("TRACK_STOP_FAILED", e)
-    }
-  }
-
-  @ReactMethod
-  fun isBatteryThrottled(promise: Promise) {
-    try {
-      val pm = rctx.getSystemService(PowerManager::class.java)
-      promise.resolve(!pm.isIgnoringBatteryOptimizations(rctx.packageName))
-    } catch (e: Exception) {
-      promise.reject("CHECK_BATEXEMPT_FAILED", e)
-    }
-  }
-
-  @ReactMethod
-  fun requestBatteryExemption(promise: Promise) {
-    try {
-      val intent =
-          Intent(
-              Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-              Uri.parse("package:${rctx.packageName}"),
-          )
-      val act = rctx.currentActivity!!
-      act.startActivity(intent)
-
-      promise.resolve(null)
-    } catch (e: Exception) {
-      promise.reject("REQUEST_BATEXEMPT_FAILED", e)
     }
   }
 

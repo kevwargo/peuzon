@@ -3,8 +3,6 @@ import { NativeModules, PermissionsAndroid } from "react-native";
 const intTracker = NativeModules.LocTrack as {
   startTracking: () => Promise<void>;
   stopTracking: () => Promise<void>;
-  isBatteryThrottled: () => Promise<boolean>;
-  requestBatteryExemption: () => Promise<void>;
 };
 
 const locationGranted = async (): Promise<boolean> => {
@@ -24,8 +22,6 @@ const Tracker = {
     return await intTracker.startTracking();
   },
   stop: intTracker.stopTracking,
-  isBatteryThrottled: intTracker.isBatteryThrottled,
-  requestBatteryExemption: intTracker.requestBatteryExemption,
 };
 
 export default Tracker;

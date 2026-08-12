@@ -1,6 +1,7 @@
 import { createContext, PropsWithChildren, useEffect, useState } from "react";
-import { ActivityIndicator, Button, Modal, TextInput, View } from "react-native";
+import { ActivityIndicator, Button, StyleSheet, Text, TextInput } from "react-native";
 import { getDeviceName, setDeviceName } from "../api/device";
+import Dialog from "../components/Dialog";
 import Device from "../native/device";
 
 export interface DeviceInfo {
@@ -43,17 +44,36 @@ function DeviceInfoProvider({ children }: PropsWithChildren) {
   return !id ? (
     <ActivityIndicator size="large" />
   ) : !name ? (
-    <Modal animationType="slide" transparent={true} visible={true}>
-      <View>
-        {settingName && <ActivityIndicator size="small" />}
-
-        <TextInput placeholder="New device name" value={nameInput} onChangeText={setNameInput} />
-        <Button disabled={settingName || !nameInput} title="submit" onPress={submitName} />
-      </View>
-    </Modal>
+    <Dialog>
+      {settingName && <ActivityIndicator size="small" />}
+      <Text style={styles.header}>Your device is unnamed, set new name</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="New device name"
+        placeholderTextColor="#80aa80"
+        value={nameInput}
+        onChangeText={setNameInput}
+      />
+      <Button disabled={settingName || !nameInput} title="submit" onPress={submitName} />
+    </Dialog>
   ) : (
     <DeviceInfoContext value={{ id, name }}>{children}</DeviceInfoContext>
   );
 }
+
+const styles = StyleSheet.create({
+  input: {
+    padding: 5,
+    borderColor: "#000",
+    borderWidth: 1,
+    borderRadius: 3,
+    color: "green",
+  },
+  header: {
+    textAlign: "center",
+    fontSize: 26,
+    color: "black",
+  },
+});
 
 export default DeviceInfoProvider;
