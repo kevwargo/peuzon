@@ -1,4 +1,4 @@
-package com.peuzon
+package com.peuzon.services
 
 import android.Manifest
 import android.app.Notification
@@ -26,6 +26,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.peuzon.R
 import com.peuzon.providers.deviceUUID
 import java.util.Collections
 import kotlinx.coroutines.CoroutineScope

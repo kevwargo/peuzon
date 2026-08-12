@@ -21,8 +21,11 @@ build: ensure-env
 install: build
 	adb install android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
 
-logcat:
+logcat-app:
 	adb logcat --pid $(shell adb shell pidof com.peuzon)
+
+logcat-js:
+	adb logcat "*:S" ReactNativeJS:D
 
 start-android:
 	adb shell am start -S com.peuzon/.MainActivity

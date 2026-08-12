@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text } from "react-native";
-import dt from "./dt";
+import dt from "../utils/dt";
 
 function LogView({ entries }: LogViewProps) {
   const scrollRef = useRef<ScrollView>(null);

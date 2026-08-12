@@ -1,4 +1,4 @@
-package com.peuzon
+package com.peuzon.modules
 
 import android.Manifest
 import android.content.ComponentName
@@ -16,31 +16,9 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.peuzon.services.Tracker
 
 class TrackModule(private val rctx: ReactApplicationContext) : ReactContextBaseJavaModule(rctx) {
-  companion object {
-    private const val TAG = "RNTrackModule"
-  }
-
-  private var trackerService: Tracker? = null
-
-  private val serviceConnection =
-      object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
-          val trackerBinder = binder as? Tracker.LocalBinder ?: return
-
-          trackerService =
-              trackerBinder.getService().apply {
-                Log.i(TAG, "connected to $this")
-                attachReactContext(rctx)
-              }
-        }
-
-        override fun onServiceDisconnected(name: ComponentName) {
-          Log.i(TAG, "disconnected from $trackerService")
-          trackerService = null
-        }
-      }
 
   override fun getName() = "LocTrack"
 
@@ -124,4 +102,28 @@ class TrackModule(private val rctx: ReactApplicationContext) : ReactContextBaseJ
       promise.reject("REQUEST_BATEXEMPT_FAILED", e)
     }
   }
+
+  companion object {
+    private const val TAG = "RNTrackModule"
+  }
+
+  private var trackerService: Tracker? = null
+
+  private val serviceConnection =
+      object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+          val trackerBinder = binder as? Tracker.LocalBinder ?: return
+
+          trackerService =
+              trackerBinder.getService().apply {
+                Log.i(TAG, "connected to $this")
+                attachReactContext(rctx)
+              }
+        }
+
+        override fun onServiceDisconnected(name: ComponentName) {
+          Log.i(TAG, "disconnected from $trackerService")
+          trackerService = null
+        }
+      }
 }
