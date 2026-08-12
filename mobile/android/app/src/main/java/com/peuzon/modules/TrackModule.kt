@@ -82,6 +82,8 @@ class TrackModule(private val rctx: ReactApplicationContext) : ReactContextBaseJ
   private val serviceConnection =
       object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+          Log.i(TAG, "onServiceConnected($name, $binder)")
+
           val trackerBinder = binder as? Tracker.LocalBinder ?: return
 
           trackerService =

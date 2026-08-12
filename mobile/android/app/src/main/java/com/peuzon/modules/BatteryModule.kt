@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -12,6 +13,10 @@ import com.facebook.react.bridge.ReactMethod
 class BatteryModule(private val rctx: ReactApplicationContext) : ReactContextBaseJavaModule(rctx) {
 
   override fun getName() = "Battery"
+
+  override fun initialize() {
+    Log.i(TAG, "initialized")
+  }
 
   @ReactMethod
   fun isThrottled(promise: Promise) {
@@ -38,5 +43,9 @@ class BatteryModule(private val rctx: ReactApplicationContext) : ReactContextBas
     } catch (e: Exception) {
       promise.reject("REQUEST_BATEXEMPT_FAILED", e)
     }
+  }
+
+  companion object {
+    private const val TAG = "RNBatteryModule"
   }
 }

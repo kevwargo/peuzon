@@ -11,8 +11,9 @@ from botocore.exceptions import ClientError
 from peuzon.api_keys import encode_api_key
 from peuzon.botores import boto3_resource
 from peuzon.lambda_handler import lambda_handler
-from peuzon.models.rest import (AuthorizerEvent, DeviceEvent,
-                                DeviceSubresourceEvent, SessionEvent)
+from peuzon.models.rest import (AddLocationsEvent, AuthorizerEvent,
+                                DeviceEvent, DeviceSubresourceEvent,
+                                SessionEvent)
 
 API_KEYS = boto3_resource("dynamodb").Table(os.getenv("API_KEYS_TABLE"))
 DEVICES = boto3_resource("dynamodb").Table(os.getenv("DEVICES_TABLE"))
@@ -94,14 +95,16 @@ def stop_session(event: SessionEvent):
 
 
 @lambda_handler
-def add_locations(event: SessionEvent):
+def add_locations(event: AddLocationsEvent):
     device = DEVICES.get_item(Key={"id": event.device_id}).get("Item")
     if not device:
         raise ApiException(404, f"Device {event.device_id} not found")
 
-    session = SESSIONS.get_item(Key={"id": event.session_id}).get("Item")
-    if not session:
-        raise ApiException(404, f"Session {event.session_id} not found")
+    session = None
+    if event.session_id:
+        session = SESSIONS.get_item(Key={"id": event.session_id}).get("Item")
+        if not session:
+            raise ApiException(404, f"Session {event.session_id} not found")
 
     print(
         json.dumps(
@@ -119,7 +122,7 @@ def add_locations(event: SessionEvent):
         for loc in event.payload_json
     ]
 
-    subscribers = device.get("subscribers", set()).union(session.get("subscribers", set()))
+    subscribers = device.get("subscribers", set()).union((session or {}).get("subscribers", set()))
     for subscriber in subscribers:
         try:
             WS_CALLBACK.post_to_connection(
@@ -129,8 +132,7 @@ def add_locations(event: SessionEvent):
         except ClientError as ce:
             print(f"{type(ce).__name__}({ce}): {subscriber}")
 
-    if isinstance(event.payload_json, list):
-        _store_locations(event, locations)
+    _store_locations(event, locations)
 
     return {"statusCode": 201, "body": ""}
 
@@ -155,10 +157,12 @@ def _get_active_session(device_id: str) -> dict | None:
             return last_session
 
 
-def _store_locations(event: SessionEvent, locations: list[dict]):
+def _store_locations(event: AddLocationsEvent, locations: list[dict]):
     with LOCATIONS.batch_writer() as batch:
         for loc in locations:
-            item = _to_decimal(loc) | {"deviceId": event.device_id, "sessionId": event.session_id}
+            item = _to_decimal(loc) | {"deviceId": event.device_id}
+            if event.session_id:
+                item["sessionId"] = event.session_id
             batch.put_item(Item=item)
 
 

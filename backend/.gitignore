@@ -2,4 +2,3 @@ node_modules
 cdk.out
 __pycache__
 *.pyc
-session-names.json

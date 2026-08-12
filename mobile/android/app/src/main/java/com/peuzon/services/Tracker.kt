@@ -110,7 +110,7 @@ class Tracker : Service() {
     Log.i(TAG, "onCreate(${this}), deviceId: $deviceUUID")
 
     val apiUrl = getString(R.string.api_url)
-    endpoint = "$apiUrl/sessions/$deviceUUID/locations"
+    endpoint = "$apiUrl/devices/$deviceUUID/locations"
 
     fusedClient = LocationServices.getFusedLocationProviderClient(this)
     createNotificationChannel()

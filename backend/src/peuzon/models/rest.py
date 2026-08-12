@@ -41,3 +41,9 @@ class SessionEvent(DeviceSubresourceEvent):
     @cached_property
     def session_id(self) -> str:
         return self.path_parameters["sessionId"]
+
+
+class AddLocationsEvent(DeviceSubresourceEvent):
+    @cached_property
+    def session_id(self) -> str | None:
+        return self.query_string_parameters.get("sessionId")

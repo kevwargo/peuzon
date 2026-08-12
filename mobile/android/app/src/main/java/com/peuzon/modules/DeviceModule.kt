@@ -1,5 +1,6 @@
 package com.peuzon.modules
 
+import android.util.Log
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -10,6 +11,10 @@ class DeviceModule(private val rctx: ReactApplicationContext) : ReactContextBase
 
   override fun getName() = "Device"
 
+  override fun initialize() {
+    Log.i(TAG, "initialized")
+  }
+
   @ReactMethod
   fun getUUID(promise: Promise) {
     try {
@@ -17,5 +22,9 @@ class DeviceModule(private val rctx: ReactApplicationContext) : ReactContextBase
     } catch (e: Exception) {
       promise.reject("DEVICE_UUID", e)
     }
+  }
+
+  companion object {
+    private const val TAG = "RNDeviceModule"
   }
 }

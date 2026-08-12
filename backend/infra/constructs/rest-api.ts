@@ -103,7 +103,7 @@ export class RestApi extends Construct {
       HttpMethod.POST,
     );
     this.addRoute(
-      "/devices/{deviceId}/sessions/{sessionId}/locations",
+      "/devices/{deviceId}/locations",
       createFunction(this, "rest.add_locations", {
         environment: {
           DEVICES_TABLE: props.devices.tableName,
