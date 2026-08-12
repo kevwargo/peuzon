@@ -9,7 +9,7 @@ class Package : ReactPackage {
   @Deprecated("ReactPackage legacy API")
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
     return listOf(
-        TrackModule(reactContext),
+        TrackerModule(reactContext),
         DeviceModule(reactContext),
         BatteryModule(reactContext),
     )

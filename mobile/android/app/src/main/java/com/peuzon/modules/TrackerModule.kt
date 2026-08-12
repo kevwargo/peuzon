@@ -11,13 +11,10 @@ import android.util.Log
 import androidx.core.content.PermissionChecker
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
-import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.peuzon.services.Tracker
 
-class TrackModule(private val rctx: ReactApplicationContext) : ReactContextBaseJavaModule(rctx) {
-
-  override fun getName() = "LocTrack"
+class TrackerModule(private val rctx: ReactApplicationContext) : BaseModule(rctx, "Tracker") {
 
   override fun initialize() {
     val intent = Intent(rctx, Tracker::class.java)
@@ -71,10 +68,6 @@ class TrackModule(private val rctx: ReactApplicationContext) : ReactContextBaseJ
     } catch (e: Exception) {
       promise.reject("TRACK_STOP_FAILED", e)
     }
-  }
-
-  companion object {
-    private const val TAG = "RNTrackModule"
   }
 
   private var trackerService: Tracker? = null

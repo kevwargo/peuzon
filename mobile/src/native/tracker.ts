@@ -1,6 +1,6 @@
 import { NativeModules, PermissionsAndroid } from "react-native";
 
-const intTracker = NativeModules.LocTrack as {
+const intTracker = NativeModules.Tracker as {
   startTracking: () => Promise<void>;
   stopTracking: () => Promise<void>;
 };
