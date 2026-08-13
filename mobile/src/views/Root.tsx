@@ -1,5 +1,6 @@
 import { useContext, useState } from "react";
 import { Button, StyleSheet, Text, View } from "react-native";
+import Controller from "../native/controller";
 import Tracker from "../native/tracker";
 import { DeviceInfoContext } from "../providers/DeviceInfoProvider";
 import BatteryExemptDialog from "./BatteryExemptDialog";
@@ -22,6 +23,15 @@ function Root() {
 
   return (
     <View>
+      <Button
+        color="red"
+        title="EXIT"
+        onPress={() => {
+          Controller.closeUI()
+            .then(() => console.log("Exit success"))
+            .catch(err => console.log(err));
+        }}
+      />
       <BatteryExemptDialog />
       <Text style={styles.text}>
         Hi, <Text style={styles.deviceName}>{deviceInfo?.name}</Text>
@@ -43,6 +53,9 @@ const styles = StyleSheet.create({
   deviceName: {
     fontSize: 30,
     fontWeight: "bold",
+  },
+  exitButton: {
+    backgroundColor: "red",
   },
 });
 
