@@ -37,7 +37,7 @@
       </intent-filter>
     </activity>
     <service
-        android:name=".services.Tracker"
+        android:name=".tracking.TrackService"
         android:foregroundServiceType="location"
         android:exported="false">
     </service>

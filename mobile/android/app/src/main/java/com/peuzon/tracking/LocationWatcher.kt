@@ -1,0 +1,56 @@
+package com.peuzon.tracking
+
+import android.content.Context
+import android.location.Location
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.Granularity
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import kotlinx.coroutines.channels.Channel
+
+class LocationWatcher(private val ch: Channel<Location>) {
+
+  companion object {
+    private const val INTERVAL_MS = 10_000L
+    private const val DISTANCE_METERS = 5.0f
+  }
+
+  private var client: FusedLocationProviderClient? = null
+  private var started = false
+
+  fun start(ctx: Context) {
+    if (started) {
+      return
+    }
+
+    if (client == null) {
+      client = LocationServices.getFusedLocationProviderClient(ctx)
+    }
+
+    client?.requestLocationUpdates(
+        LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, INTERVAL_MS)
+            .setGranularity(Granularity.GRANULARITY_FINE)
+            .setMinUpdateDistanceMeters(DISTANCE_METERS)
+            .build(),
+        callback,
+        ctx.mainLooper,
+    )
+
+    started = true
+  }
+
+  fun stop() {
+    client?.removeLocationUpdates(callback)
+    ch.close()
+  }
+
+  private val callback =
+      object : LocationCallback() {
+        override fun onLocationResult(result: LocationResult) {
+          result.locations.forEach(ch::trySend)
+        }
+      }
+}

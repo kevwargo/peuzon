@@ -12,12 +12,12 @@ import androidx.core.content.PermissionChecker
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactMethod
-import com.peuzon.services.Tracker
+import com.peuzon.tracking.TrackService
 
 class TrackerModule(private val rctx: ReactApplicationContext) : BaseModule(rctx, "Tracker") {
 
   override fun initialize() {
-    val intent = Intent(rctx, Tracker::class.java)
+    val intent = Intent(rctx, TrackService::class.java)
     val bound = rctx.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
     Log.i(TAG, "bound in initialize() = $bound")
   }
@@ -43,7 +43,7 @@ class TrackerModule(private val rctx: ReactApplicationContext) : BaseModule(rctx
 
       Log.i(TAG, "Location watch allowed, calling startForeground()")
 
-      val intent = Intent(rctx, Tracker::class.java)
+      val intent = Intent(rctx, TrackService::class.java)
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         rctx.startForegroundService(intent)
       } else {
@@ -61,7 +61,7 @@ class TrackerModule(private val rctx: ReactApplicationContext) : BaseModule(rctx
     try {
       Log.i(TAG, "unbinding $trackerService in @React stopTracking()")
       rctx.unbindService(serviceConnection)
-      val intent = Intent(rctx, Tracker::class.java)
+      val intent = Intent(rctx, TrackService::class.java)
       val stopped = rctx.stopService(intent)
       Log.i(TAG, "tracker service stopped($stopped) and unbound")
       promise.resolve(null)
@@ -70,14 +70,14 @@ class TrackerModule(private val rctx: ReactApplicationContext) : BaseModule(rctx
     }
   }
 
-  private var trackerService: Tracker? = null
+  private var trackerService: TrackService? = null
 
   private val serviceConnection =
       object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
           Log.i(TAG, "onServiceConnected($name, $binder)")
 
-          val trackerBinder = binder as? Tracker.LocalBinder ?: return
+          val trackerBinder = binder as? TrackService.LocalBinder ?: return
 
           trackerService =
               trackerBinder.getService().apply {
