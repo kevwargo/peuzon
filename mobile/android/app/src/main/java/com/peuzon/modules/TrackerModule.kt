@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.content.PermissionChecker
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactMethod
@@ -19,12 +20,33 @@ class TrackerModule(private val rctx: ReactApplicationContext) : BaseModule(rctx
   override fun initialize() {
     val intent = Intent(rctx, TrackService::class.java)
     val bound = rctx.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
-    Log.i(TAG, "bound in initialize() = $bound")
+    Log.i(TAG, "bound in initialize() = ${bound}")
   }
 
   override fun invalidate() {
-    Log.i(TAG, "invalidate(), unbinding $trackerService")
+    Log.i(TAG, "invalidate(), unbinding ${trackerService}")
     rctx.unbindService(serviceConnection)
+  }
+
+  @ReactMethod
+  fun getState(promise: Promise) {
+    try {
+      val svc = trackerService
+
+      if (svc == null) {
+        promise.resolve(null)
+        return
+      }
+
+      val res =
+          Arguments.createMap().apply {
+            putBoolean("started", svc.isStarted)
+          }
+
+      promise.resolve(res)
+    } catch (e: Exception) {
+      promise.reject("TRACK_STATE", e)
+    }
   }
 
   @ReactMethod
@@ -59,11 +81,11 @@ class TrackerModule(private val rctx: ReactApplicationContext) : BaseModule(rctx
   @ReactMethod
   fun stopTracking(promise: Promise) {
     try {
-      Log.i(TAG, "unbinding $trackerService in @React stopTracking()")
+      Log.i(TAG, "unbinding ${trackerService} in @React stopTracking()")
       rctx.unbindService(serviceConnection)
       val intent = Intent(rctx, TrackService::class.java)
       val stopped = rctx.stopService(intent)
-      Log.i(TAG, "tracker service stopped($stopped) and unbound")
+      Log.i(TAG, "tracker service stopped(${stopped}) and unbound")
       promise.resolve(null)
     } catch (e: Exception) {
       promise.reject("TRACK_STOP_FAILED", e)
@@ -75,19 +97,18 @@ class TrackerModule(private val rctx: ReactApplicationContext) : BaseModule(rctx
   private val serviceConnection =
       object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
-          Log.i(TAG, "onServiceConnected($name, $binder)")
+          Log.i(TAG, "onServiceConnected(${name}, ${binder})")
 
           val trackerBinder = binder as? TrackService.LocalBinder ?: return
 
           trackerService =
               trackerBinder.getService().apply {
-                Log.i(TAG, "connected to $this")
-                attachReactContext(rctx)
+                Log.i(TAG, "connected to ${this}")
               }
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
-          Log.i(TAG, "disconnected from $trackerService")
+          Log.i(TAG, "disconnected from ${trackerService}")
           trackerService = null
         }
       }

@@ -1,4 +1,4 @@
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Button, StyleSheet, Text, View } from "react-native";
 import Controller from "../native/controller";
 import Tracker from "../native/tracker";
@@ -8,18 +8,36 @@ import BatteryExemptDialog from "./BatteryExemptDialog";
 function Root() {
   const deviceInfo = useContext(DeviceInfoContext);
 
-  const [started, setStarted] = useState(false);
+  const [alreadyStarted, setAlreadyStarted] = useState(false);
+  const [startedManually, setStartedManually] = useState(false);
   const [starting, setStarting] = useState(false);
 
   const startBeacon = () => {
     setStarting(true);
     Tracker.start()
       .then(() => {
-        setStarted(true);
+        setStartedManually(true);
       })
       .catch(err => console.error(err))
       .finally(() => setStarting(false));
   };
+
+  useEffect(() => {
+    Tracker.getState()
+      .then(s => {
+        if (s) {
+          if (s.started) {
+            setAlreadyStarted(true);
+            console.log("Tracker is started");
+          } else {
+            console.log("Tracker is not started");
+          }
+        } else {
+          console.log("Tracker state is null");
+        }
+      })
+      .catch(err => console.error(err));
+  }, []);
 
   return (
     <View>
@@ -36,10 +54,12 @@ function Root() {
       <Text style={styles.text}>
         Hi, <Text style={styles.deviceName}>{deviceInfo?.name}</Text>
       </Text>
-      {started ? (
-        <Text style={styles.text}>Beacon is active...</Text>
+      {alreadyStarted ? (
+        <Text style={styles.text}>Started earlier</Text>
+      ) : startedManually ? (
+        <Text style={styles.text}>Started manually</Text>
       ) : (
-        <Button title="start beacon" disabled={starting} onPress={startBeacon} />
+        <Button title="Start" disabled={starting} onPress={startBeacon} />
       )}
     </View>
   );

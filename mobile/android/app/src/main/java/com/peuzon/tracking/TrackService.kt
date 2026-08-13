@@ -14,7 +14,6 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.core.content.PermissionChecker
-import com.facebook.react.bridge.ReactApplicationContext
 import com.peuzon.R
 import com.peuzon.providers.deviceUUID
 import kotlinx.coroutines.channels.Channel
@@ -36,8 +35,6 @@ class TrackService : Service() {
   private val locationChannel = Channel<Location>()
   private val locationWatcher = LocationWatcher(locationChannel)
   private val locationUploader = Uploader(locationChannel)
-
-  @Volatile private var reactContext: ReactApplicationContext? = null
 
   override fun onCreate() {
     super.onCreate()
@@ -80,6 +77,8 @@ class TrackService : Service() {
         getString(R.string.api_key),
     )
 
+    isStarted = true
+
     return START_STICKY
   }
 
@@ -89,16 +88,17 @@ class TrackService : Service() {
     locationWatcher.stop()
     locationUploader.stop()
 
+    isStarted = false
+
     super.onDestroy()
   }
 
-  fun attachReactContext(rctx: ReactApplicationContext) {
-    reactContext = rctx
-    Log.i(TAG, "attached react context ${rctx}")
-  }
+  @Volatile
+  var isStarted = false
+    private set
 
   private fun buildNotification(): Notification {
-    val packageInfo =
+    val pkgInfo =
         if (Build.VERSION.SDK_INT >= 33) {
           packageManager.getPackageInfo(packageName, 0)
         } else {
@@ -107,7 +107,7 @@ class TrackService : Service() {
 
     return Notification.Builder(this, CHANNEL_ID)
         .setContentTitle("GPS Tracking")
-        .setContentText("Tracking and sending realtime location (${packageInfo.versionName})")
+        .setContentText("Tracking and sending realtime location (${pkgInfo.versionName})")
         .setSmallIcon(android.R.drawable.ic_menu_mylocation)
         .build()
   }
