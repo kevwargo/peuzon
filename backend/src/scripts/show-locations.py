@@ -6,15 +6,13 @@ from pathlib import Path
 import boto3
 from boto3.dynamodb.conditions import Key
 
-SESSION_MAP = json.loads((Path(__file__).parent / "../../session-names.json").read_text())
-
 OUTPUTS = json.loads((Path(__file__).parent / "../../cdk.out/outputs.json").read_text())
 TABLE = boto3.resource("dynamodb").Table(OUTPUTS["PeuzonStack"]["LocationsTableName"])
 
 
-def query_all(sess_name: str):
+def query_all(device_id: str):
     more, params = True, {
-        "KeyConditionExpression": Key("sessionId").eq(SESSION_MAP[sess_name]),
+        "KeyConditionExpression": Key("deviceId").eq(device_id),
     }
     while more:
         resp = TABLE.query(**params)
@@ -23,9 +21,9 @@ def query_all(sess_name: str):
             print(_format_item(item))
 
 
-def query_some(sess_name: str, limit: int):
+def query_some(device_id: str, limit: int):
     resp = TABLE.query(
-        KeyConditionExpression=Key("sessionId").eq(SESSION_MAP[sess_name]),
+        KeyConditionExpression=Key("deviceId").eq(device_id),
         ScanIndexForward=False,
         Limit=limit,
     )
@@ -44,7 +42,7 @@ def _format_item(item: dict) -> str:
     lat = item.get("lat") or item["latitude"]
     lng = item.get("lng") or item["longitude"]
 
-    return f'{item["timestamp"]} {lat} {lng} {delta}'
+    return f'{item["timestamp"]} {recv} {lat} {lng} {delta}'
 
 
 if __name__ == "__main__":
