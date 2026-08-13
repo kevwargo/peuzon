@@ -12,6 +12,7 @@ class Package : ReactPackage {
         TrackerModule(reactContext),
         DeviceModule(reactContext),
         BatteryModule(reactContext),
+        ControllerModule(reactContext),
     )
   }
 
