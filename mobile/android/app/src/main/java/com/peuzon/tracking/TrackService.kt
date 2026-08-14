@@ -25,11 +25,6 @@ class TrackService : Service() {
 
     private const val CHANNEL_ID = "gps_tracking"
     private const val NOTIFICATION_ID = 1
-
-    private const val LOCATION_INTERVAL_MS = 10_000L
-    private const val MAX_BUF_SIZE = 1000
-
-    private const val EVENT_LATEST_LOCATION = "LatestLocation"
   }
 
   private val locationChannel = Channel<Location>()
@@ -42,13 +37,12 @@ class TrackService : Service() {
           },
       )
   private val locationUploader = Uploader(locationChannel)
-
   private var trackListener: TrackListener? = null
 
   override fun onCreate() {
     super.onCreate()
 
-    Log.i(TAG, "onCreate(${this}), deviceId: ${deviceUUID}")
+    Log.i(TAG, "${this}.onCreate(), deviceId: ${deviceUUID}")
 
     createNotificationChannel()
   }
