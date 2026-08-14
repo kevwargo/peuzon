@@ -35,10 +35,16 @@ def _handle_message(msg: Message):
             ConsistentRead=True,
         )
     else:
+        cond = Key("deviceId").eq(msg.device_id)
+        if msg.since:
+            cond = cond & Key("timestamp").gte(msg.since)
+
         params = dict(
-            KeyConditionExpression=Key("deviceId").eq(msg.device_id),
+            KeyConditionExpression=cond,
             ConsistentRead=True,
         )
+
+    print(json.dumps({"ddb_params": params, "msg": msg}, default=str))
 
     more = True
     with _WSBatchSender(WS_CALLBACK, msg.conn_id) as batch:

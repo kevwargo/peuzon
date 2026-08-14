@@ -43,6 +43,10 @@ class AuthorizerEvent(AwsModel):
     def session_id(self) -> str | None:
         return self.query_string_parameters.get("s")
 
+    @cached_property
+    def since(self) -> str | None:
+        return self.query_string_parameters.get("since")
+
 
 class WebSocketRouteEvent(AwsModel):
     headers: dict[str, str] = {}
@@ -57,4 +61,8 @@ class WebSocketRouteEvent(AwsModel):
 
     @cached_property
     def session_id(self) -> str | None:
-        return self.request_context.authorizer["sessionId"]
+        return self.request_context.authorizer.get("sessionId")
+
+    @cached_property
+    def since(self) -> str | None:
+        return self.request_context.authorizer.get("since")

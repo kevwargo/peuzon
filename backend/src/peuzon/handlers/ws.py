@@ -27,7 +27,9 @@ def auth(event: AuthorizerEvent):
             raise ValueError(f"Session {event.session_id} not found")
 
         return _generate_auth_response(
-            True, event.method_arn, {"deviceId": event.device_id, "sessionId": event.session_id}
+            True,
+            event.method_arn,
+            {"deviceId": event.device_id, "sessionId": event.session_id, "since": event.since},
         )
     except Exception as e:
         print(f"{type(e).__name__}({e})")
@@ -44,6 +46,7 @@ def connect(event: WebSocketRouteEvent):
             device_id=event.device_id,
             session_id=event.session_id,
             conn_id=event.request_context.connection_id,
+            since=event.since,
         ).model_dump_json()
     )
 
