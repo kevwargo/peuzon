@@ -1,6 +1,7 @@
 import { formatDistanceToNow } from "date-fns";
 import { useContext, useEffect, useState } from "react";
-import { Button, StyleSheet, Text, View } from "react-native";
+import { Button, Linking, StyleSheet, Text, View } from "react-native";
+import { WEBSITE_URL } from "../../env.json";
 import Controller from "../native/controller";
 import { Location } from "../native/location";
 import Tracker from "../native/tracker";
@@ -81,7 +82,10 @@ function Root() {
         Hi, <Text style={styles.deviceName}>{deviceInfo?.name}</Text>
       </Text>
       {started ? (
-        <Button title="Stop" disabled={loading} onPress={stopTracking} />
+        <>
+          <Button title="Stop" disabled={loading} onPress={stopTracking} />
+          {deviceInfo?.id && <SendLinkButton deviceId={deviceInfo?.id} />}
+        </>
       ) : (
         <Button title="Start" disabled={loading} onPress={startTracking} />
       )}
@@ -124,6 +128,42 @@ const CurrentLocation = ({ loc }: CurrentLocationProps) => {
 
 interface CurrentLocationProps {
   loc: Location;
+}
+
+const SendLinkButton = ({ deviceId }: SendLinkButtonProps) => {
+  const webURL = `${WEBSITE_URL}?d=${encodeURI(deviceId)}`;
+  const tgURL = `https://t.me/share/url?url=${encodeURIComponent(webURL)}&text=Peuzon+link`;
+  const [supported, setSupported] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    Linking.canOpenURL(tgURL)
+      .then(s => {
+        console.log(`Can open ${tgURL} - ${s}`);
+        setSupported(s);
+      })
+      .catch(err => console.error(err));
+  }, [tgURL, setSupported]);
+
+  const open = async () => {
+    setSending(true);
+    try {
+      const res = await Linking.openURL(tgURL);
+      console.log(`Open ${tgURL} result - ${res}`);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return supported ? (
+    <Button title="Send link" onPress={open} disabled={sending} />
+  ) : (
+    <Button title="Can't send link" disabled={true} />
+  );
+};
+
+interface SendLinkButtonProps {
+  deviceId: string;
 }
 
 const styles = StyleSheet.create({
