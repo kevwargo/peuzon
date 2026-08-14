@@ -18,7 +18,6 @@ function App() {
     const onFirstPos = (ev: MessageEvent) => {
       try {
         const msg = JSON.parse(ev.data) as GPSMsg;
-        console.log("Start", new Date(msg.timestamp).toISOString(), msg.pos);
         setStartPos(msg.pos);
         wsRef.current = wsock;
         wsock.removeEventListener("message", onFirstPos);
