@@ -36,6 +36,8 @@ class TrackService : Service() {
   private val locationWatcher = LocationWatcher(locationChannel)
   private val locationUploader = Uploader(locationChannel)
 
+  private var trackListener: TrackListener? = null
+
   override fun onCreate() {
     super.onCreate()
 
@@ -51,6 +53,11 @@ class TrackService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     Log.i(TAG, "onStartCommand(${this})")
+
+    if (isStarted) {
+      Log.w(TAG, "onStartCommand called for already started service")
+      return START_STICKY
+    }
 
     val hasPermission =
         PermissionChecker.checkSelfPermission(
@@ -78,6 +85,7 @@ class TrackService : Service() {
     )
 
     isStarted = true
+    trackListener?.onStateChanged(true)
 
     return START_STICKY
   }
@@ -85,12 +93,38 @@ class TrackService : Service() {
   override fun onDestroy() {
     Log.i(TAG, "${this}.onDestroy()")
 
+    stopTrackingWork()
+    super.onDestroy()
+  }
+
+  fun stopTracking() {
+    stopTrackingWork()
+
+    Log.i(TAG, "calling stopForeground(${STOP_FOREGROUND_REMOVE})")
+    stopForeground(STOP_FOREGROUND_REMOVE)
+
+    Log.i(TAG, "calling stopSelf()")
+    stopSelf()
+  }
+
+  private fun stopTrackingWork() {
+    if (!isStarted) {
+      Log.i(TAG, "tracking work is already stopped")
+      return
+    }
+
+    Log.i(TAG, "stopping tracking work ...")
+
     locationWatcher.stop()
     locationUploader.stop()
-
     isStarted = false
+    trackListener?.onStateChanged(false)
+  }
 
-    super.onDestroy()
+  fun setListener(listener: TrackListener?) {
+    Log.i(TAG, "Setting ${this}.trackListener = ${listener}")
+    trackListener = listener
+    trackListener?.onStateChanged(isStarted)
   }
 
   @Volatile

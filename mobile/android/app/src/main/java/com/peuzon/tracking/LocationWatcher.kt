@@ -2,6 +2,7 @@ package com.peuzon.tracking
 
 import android.content.Context
 import android.location.Location
+import android.util.Log
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.Granularity
 import com.google.android.gms.location.LocationCallback
@@ -16,6 +17,8 @@ class LocationWatcher(private val ch: Channel<Location>) {
   companion object {
     private const val INTERVAL_MS = 10_000L
     private const val DISTANCE_METERS = 5.0f
+
+    private const val TAG = "LocationWatcher"
   }
 
   private var client: FusedLocationProviderClient? = null
@@ -23,6 +26,7 @@ class LocationWatcher(private val ch: Channel<Location>) {
 
   fun start(ctx: Context) {
     if (started) {
+      Log.w(TAG, "already started")
       return
     }
 
@@ -40,11 +44,13 @@ class LocationWatcher(private val ch: Channel<Location>) {
     )
 
     started = true
+    Log.i(TAG, "started")
   }
 
   fun stop() {
     client?.removeLocationUpdates(callback)
-    ch.close()
+    started = false
+    Log.i(TAG, "stopped")
   }
 
   private val callback =

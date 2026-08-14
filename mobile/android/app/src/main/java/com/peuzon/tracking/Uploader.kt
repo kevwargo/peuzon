@@ -2,6 +2,7 @@ package com.peuzon.tracking
 
 import android.location.Location
 import android.util.Log
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,18 +17,38 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 class Uploader(private val locationChannel: Channel<Location>) {
   companion object {
-    private const val TAG = "LocationsUploader"
-
     private const val FLUSH_INTERVAL_MS = 10_000L
     private const val MAX_BATCH_SIZE = 100
+
+    private const val TAG = "LocationsUploader"
   }
 
-  private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+  private var scope: CoroutineScope? = null
   private val httpClient = OkHttpClient()
 
   fun start(endpoint: String, apiKey: String) {
-    scope.launch {
-      Log.i(TAG, "starting flushLocations() loop")
+    Log.i(TAG, "start(${endpoint}) called with scope ${scope}")
+
+    if (scope != null) return
+
+    scope =
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).apply {
+          launch {
+            uploadLoop(endpoint, apiKey)
+          }
+        }
+  }
+
+  fun stop() {
+    scope?.cancel()
+    Log.i(TAG, "stopped, scope ${scope} cancelled")
+
+    scope = null
+  }
+
+  private suspend fun uploadLoop(endpoint: String, apiKey: String) {
+    try {
+      Log.i(TAG, "starting upload loop")
       while (true) {
         val batch = mutableListOf<Location>()
 
@@ -50,11 +71,12 @@ class Uploader(private val locationChannel: Channel<Location>) {
 
         uploadBatch(batch, endpoint, apiKey)
       }
+    } catch (e: CancellationException) {
+      Log.i(TAG, "upload loop cancelled")
+      throw e
+    } finally {
+      Log.i(TAG, "upload loop finished")
     }
-  }
-
-  fun stop() {
-    scope.cancel()
   }
 
   private fun uploadBatch(batch: List<Location>, endpoint: String, apiKey: String) {

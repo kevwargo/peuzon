@@ -8,36 +8,48 @@ import BatteryExemptDialog from "./BatteryExemptDialog";
 function Root() {
   const deviceInfo = useContext(DeviceInfoContext);
 
-  const [alreadyStarted, setAlreadyStarted] = useState(false);
-  const [startedManually, setStartedManually] = useState(false);
-  const [starting, setStarting] = useState(false);
+  const [started, setStarted] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const startBeacon = () => {
-    setStarting(true);
+  const startTracking = () => {
+    setLoading(true);
     Tracker.start()
-      .then(() => {
-        setStartedManually(true);
-      })
-      .catch(err => console.error(err))
-      .finally(() => setStarting(false));
+      .then(() => console.log("Tracking start request succeeded"))
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
   };
 
   useEffect(() => {
     Tracker.getState()
       .then(s => {
         if (s) {
-          if (s.started) {
-            setAlreadyStarted(true);
-            console.log("Tracker is started");
-          } else {
-            console.log("Tracker is not started");
-          }
+          setStarted(s.started);
+          console.log(`Tracker started: ${s.started}`);
         } else {
           console.log("Tracker state is null");
         }
       })
-      .catch(err => console.error(err));
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
+
+    return Tracker.addStateChangeListener(s => {
+      console.log(`Received state change event - ${s}`);
+      setStarted(s);
+      setLoading(false);
+    });
   }, []);
+
+  const stopTracking = () => {
+    setLoading(true);
+    Tracker.stop()
+      .then(() => console.log("Tracking stop request succeeded"))
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
+  };
 
   return (
     <View>
@@ -54,12 +66,10 @@ function Root() {
       <Text style={styles.text}>
         Hi, <Text style={styles.deviceName}>{deviceInfo?.name}</Text>
       </Text>
-      {alreadyStarted ? (
-        <Text style={styles.text}>Started earlier</Text>
-      ) : startedManually ? (
-        <Text style={styles.text}>Started manually</Text>
+      {started ? (
+        <Button title="Stop" disabled={loading} onPress={stopTracking} />
       ) : (
-        <Button title="Start" disabled={starting} onPress={startBeacon} />
+        <Button title="Start" disabled={loading} onPress={startTracking} />
       )}
     </View>
   );
