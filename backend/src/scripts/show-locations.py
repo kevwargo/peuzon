@@ -33,9 +33,14 @@ def query_some(device_id: str, limit: int):
 
 def _format_item(item: dict) -> str:
     if recv := item.get("receivedAt"):
-        recv = datetime.fromisoformat(recv)
+        recv_dt = datetime.fromisoformat(recv)
         cap = datetime.fromisoformat(item["timestamp"])
-        delta = str(recv - cap)
+        if recv_dt > cap:
+            delta = str(recv_dt - cap)
+        elif recv_dt < cap:
+            delta = f"-{cap-recv_dt}"
+        else:
+            delta = "0"
     else:
         delta = ""
 
