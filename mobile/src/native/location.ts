@@ -5,4 +5,5 @@ export interface Location {
   acc: number;
   speed: number;
   bearing: number;
+  seqNo: number;
 }

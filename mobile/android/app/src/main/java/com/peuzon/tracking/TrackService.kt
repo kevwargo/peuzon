@@ -33,7 +33,14 @@ class TrackService : Service() {
   }
 
   private val locationChannel = Channel<Location>()
-  private val locationWatcher = LocationWatcher(locationChannel)
+  private val locationWatcher =
+      LocationWatcher(
+          locationChannel,
+          { loc ->
+            Log.i(TAG, "Conditionally sending location ${loc} to listener ${trackListener}")
+            trackListener?.onNewLocation(loc)
+          },
+      )
   private val locationUploader = Uploader(locationChannel)
 
   private var trackListener: TrackListener? = null

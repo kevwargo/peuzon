@@ -1,6 +1,8 @@
+import { formatDistanceToNow } from "date-fns";
 import { useContext, useEffect, useState } from "react";
 import { Button, StyleSheet, Text, View } from "react-native";
 import Controller from "../native/controller";
+import { Location } from "../native/location";
 import Tracker from "../native/tracker";
 import { DeviceInfoContext } from "../providers/DeviceInfoProvider";
 import BatteryExemptDialog from "./BatteryExemptDialog";
@@ -10,6 +12,7 @@ function Root() {
 
   const [started, setStarted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
 
   const startTracking = () => {
     setLoading(true);
@@ -38,6 +41,9 @@ function Root() {
       console.log(`Received state change event - ${s}`);
       setStarted(s);
       setLoading(false);
+      if (!s) {
+        setCurrentLocation(null);
+      }
     });
   }, []);
 
@@ -51,8 +57,16 @@ function Root() {
       });
   };
 
+  useEffect(
+    () =>
+      Tracker.addLocationListener(loc => {
+        setCurrentLocation(loc);
+      }),
+    [],
+  );
+
   return (
-    <View>
+    <View style={styles.container}>
       <Button
         color="red"
         title="EXIT"
@@ -71,17 +85,62 @@ function Root() {
       ) : (
         <Button title="Start" disabled={loading} onPress={startTracking} />
       )}
+      {currentLocation && <CurrentLocation loc={currentLocation} />}
     </View>
   );
 }
 
+const CurrentLocation = ({ loc }: CurrentLocationProps) => {
+  const [elapsed, setElapsed] = useState<string | null>(null);
+
+  useEffect(() => {
+    const update = () => {
+      setElapsed(
+        formatDistanceToNow(loc.ts, {
+          includeSeconds: true,
+          addSuffix: true,
+        }),
+      );
+    };
+
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [loc]);
+
+  return (
+    <View>
+      <Text style={styles.text}>
+        LAT: <Text style={styles.location}>{loc.lat}</Text>
+      </Text>
+      <Text style={styles.text}>
+        LNG: <Text style={styles.location}>{loc.lng}</Text>
+      </Text>
+      <Text style={styles.text}>SeqNo: {loc.seqNo}</Text>
+      {elapsed && <Text style={styles.text}>Last location: {elapsed}</Text>}
+    </View>
+  );
+};
+
+interface CurrentLocationProps {
+  loc: Location;
+}
+
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    gap: 10,
+  },
   text: {
     color: "#e4f8ff",
     textAlign: "center",
   },
   deviceName: {
     fontSize: 30,
+    fontWeight: "bold",
+  },
+  location: {
+    fontSize: 24,
     fontWeight: "bold",
   },
   exitButton: {

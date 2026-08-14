@@ -12,7 +12,10 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlinx.coroutines.channels.Channel
 
-class LocationWatcher(private val ch: Channel<Location>) {
+class LocationWatcher(
+    private val ch: Channel<Location>,
+    private val onNewLocation: (LocationEvent) -> Unit,
+) {
 
   companion object {
     private const val INTERVAL_MS = 10_000L
@@ -23,6 +26,7 @@ class LocationWatcher(private val ch: Channel<Location>) {
 
   private var client: FusedLocationProviderClient? = null
   private var started = false
+  private var seqNo = 0L
 
   fun start(ctx: Context) {
     if (started) {
@@ -50,13 +54,18 @@ class LocationWatcher(private val ch: Channel<Location>) {
   fun stop() {
     client?.removeLocationUpdates(callback)
     started = false
+    seqNo = 0L
     Log.i(TAG, "stopped")
   }
 
   private val callback =
       object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
-          result.locations.forEach(ch::trySend)
+          result.locations.forEach {
+            seqNo++
+            ch.trySend(it)
+            onNewLocation(LocationEvent(it, seqNo))
+          }
         }
       }
 }
