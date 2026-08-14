@@ -68,8 +68,8 @@ function Root() {
   return (
     <View style={styles.container}>
       <Button
-        color="red"
-        title="EXIT"
+        color="#be5829"
+        title="close app"
         onPress={() => {
           Controller.closeUI()
             .then(() => console.log("Exit success"))
@@ -142,9 +142,6 @@ const styles = StyleSheet.create({
   location: {
     fontSize: 24,
     fontWeight: "bold",
-  },
-  exitButton: {
-    backgroundColor: "red",
   },
 });
 
