@@ -35,11 +35,6 @@ function ensureLayer(scope: Construct): LayerVersion {
     return node as LayerVersion;
   }
 
-  let user: string | undefined;
-  if (process.getuid && process.getgid) {
-    user = `${process.getuid()}:${process.getgid()}`;
-  }
-
   return new LayerVersion(stack, layerNodeId, {
     compatibleRuntimes: [runtime],
     code: Code.fromAsset(srcDir, {
@@ -59,7 +54,8 @@ function ensureLayer(scope: Construct): LayerVersion {
             `uv pip install --requirements ${assetReqs} --target /asset-output/python`,
           ].join(" && "),
         ],
-        user,
+        user:
+          process.getuid && process.getgid ? `${process.getuid()}:${process.getgid()}` : undefined,
         environment: {
           UV_CACHE_DIR: uvCacheMnt,
           UV_LINK_MODE: "copy",

@@ -89,31 +89,31 @@ class _WSBatchSender:
 
             if self._prev_payload:
                 print(
-                    f"BatchSender: flushing {len(self._buf)-1} ({len(self._prev_payload)} bytes)"
-                    f" because {len(self._buf)} take up {size} >= {WS_MAX_MSG_SIZE} bytes"
+                    f"BatchSender: flushing {self._count-1} ({len(self._prev_payload)} bytes)"
+                    f" because {self._count} take up {size} >= {WS_MAX_MSG_SIZE} bytes"
                 )
                 self._flush(self._prev_payload)
-                self._reset_to_item(item)
+                self._add_item(item, True)
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, tb):
         if self._current_payload:
-            print(f"BatchSender: flushing rest: {len(self._buf)}({len(self._current_payload)})")
+            print(f"BatchSender: flushing rest: {self._count}({len(self._current_payload)})")
             self._flush(self._current_payload)
 
-    def _add_item(self, item: dict):
+    def _add_item(self, item: dict, reset=False):
+        if reset:
+            self._buf = []
+
         self._buf.append(item)
-        self._refresh_payload()
-
-    def _reset_to_item(self, item: dict):
-        self._buf = [item]
-        self._refresh_payload()
-
-    def _refresh_payload(self):
         self._prev_payload = self._current_payload
         self._current_payload = json.dumps(self._buf, default=self._convert_float).encode()
+
+    @property
+    def _count(self) -> int:
+        return len(self._buf)
 
     def _flush(self, payload):
         self.client.post_to_connection(ConnectionId=self.conn_id, Data=payload)
