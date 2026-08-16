@@ -3,6 +3,11 @@ revision = 3
 requires-python = ">=3.13"
 
 [[package]]
+name = "annocli"
+version = "0.2.1"
+source = { git = "https://github.com/kevwargo/annocli#8305d0b0eeab493363a58c7e224ce5733f67aa1f" }
+
+[[package]]
 name = "annotated-types"
 version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -162,6 +167,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "annocli" },
     { name = "ipython" },
     { name = "websockets" },
 ]
@@ -174,6 +180,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "annocli", git = "https://github.com/kevwargo/annocli" },
     { name = "ipython", specifier = ">=9.14.1" },
     { name = "websockets", specifier = ">=16.0" },
 ]
